@@ -99,7 +99,7 @@ test('settings can only be saved with the form token, by someone who can manage 
   const sid = await signIn();
   const page = await (await get(`/servers/${SERVER}`, sid)).text();
   const csrf = page.match(/name="csrf" value="([^"]+)"/)[1];
-  const form = { csrf, guildName: "Ashen Oath's Watch", region: 'us', channelId: '222', timezone: 'America/Chicago', sections: 'leveling', top: '10', maxLevel: '60', showMovers: '3', color: '#ff0000', enabled: 'on', action: 'save' };
+  const form = { csrf, guildName: "Ashen Oath's Watch", region: 'us', channelId: '222', timezone: 'America/Chicago', sections: 'leveling', top: '10', color: '#ff0000', enabled: 'on', action: 'save' };
 
   assert.equal((await post(`/servers/${SERVER}`, sid, { ...form, csrf: 'wrong' })).status, 403);
   assert.equal((await post(`/servers/${SERVER}`, sid, form, 'https://evil.example')).status, 403);

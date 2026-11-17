@@ -3,6 +3,7 @@ import {
   PermissionFlagsBits, SlashCommandBuilder,
 } from 'discord.js';
 import { refreshServer } from './tracker.js';
+import { CLASSES, emojiName } from './classes.js';
 
 // What the bot needs in the channel it posts to.
 export const BOT_PERMISSIONS =
@@ -32,6 +33,33 @@ const COMMANDS = [
 export function createBot({ env, store, pool }) {
   const client = new Client({ intents: [GatewayIntentBits.Guilds] });
   const busy = new Set();
+  // classId -> '<:wow_druid:123>' once the class icons are uploaded.
+  const classEmojis = {};
+
+  // Uploads Blizzard's class icons as the bot's own application emoji (once),
+  // so the embed can show them in any server without Manage Emojis.
+  async function ensureClassEmojis() {
+    try {
+      const existing = await client.application.emojis.fetch();
+      const blizzard = pool.for('us');
+      for (const [id] of Object.entries(CLASSES)) {
+        const name = emojiName(id);
+        let emoji = existing.find((e) => e.name === name);
+        if (!emoji) {
+          const url = await blizzard.getClassIconUrl(id).catch(() => null);
+          if (!url) continue;
+          emoji = await client.application.emojis.create({ attachment: url, name }).catch((e) => {
+            console.error(`Could not upload ${name}:`, e.message);
+            return null;
+          });
+        }
+        if (emoji) classEmojis[id] = `<:${emoji.name}:${emoji.id}>`;
+      }
+      console.log(`Class icons ready: ${Object.keys(classEmojis).length} of ${Object.keys(CLASSES).length}.`);
+    } catch (e) {
+      console.error('Class icons unavailable, using colored dots:', e.message);
+    }
+  }
 
   // Posts the embed the first time, then keeps editing that same message.
   async function publish(serverId) {
@@ -40,7 +68,7 @@ export function createBot({ env, store, pool }) {
     if (!server?.enabled || !server.channelId) return { ok: false, reason: 'Tracking is off or no channel is set.' };
     busy.add(serverId);
     try {
-      const { embed, patch, error } = await refreshServer(pool, server, { refreshMinutes: env.refreshMinutes });
+      const { embed, patch, error } = await refreshServer(pool, server, { refreshMinutes: env.refreshMinutes, emojis: classEmojis });
       store.patch(serverId, patch);
       const channel = await client.channels.fetch(server.channelId).catch(() => null);
       if (!channel?.isTextBased()) {
@@ -95,6 +123,7 @@ export function createBot({ env, store, pool }) {
 
   client.once(Events.ClientReady, async (c) => {
     console.log(`Bot logged in as ${c.user.tag}, in ${c.guilds.cache.size} servers.`);
+    await ensureClassEmojis();
     await c.application.commands.set(COMMANDS).catch((e) => console.error('Could not register commands:', e.message));
     await publishAll();
     setInterval(publishAll, env.refreshMinutes * 60_000);
@@ -123,6 +152,8 @@ export function createBot({ env, store, pool }) {
     postableChannels,
     canManage,
     botPermissions: BOT_PERMISSIONS,
+    classEmojis: () => classEmojis,
+    ensureClassEmojis,
     botPresent: (id) => client.guilds.cache.has(id),
     serverName: (id) => client.guilds.cache.get(id)?.name,
     start: () => client.login(env.discordToken),

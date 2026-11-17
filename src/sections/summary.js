@@ -1,17 +1,12 @@
-// Guild-wide numbers at the top of the embed.
+// One short line under the title: how many characters, average and highest level.
 export const summary = {
   id: 'summary',
-  label: 'Guild summary (members, at max level, average level)',
-  build({ members, config }) {
-    const max = config.leveling.maxLevel;
-    const atMax = members.filter((m) => m.level >= max).length;
-    const avg = members.length ? members.reduce((s, m) => s + m.level, 0) / members.length : 0;
-    return {
-      fields: [
-        { name: 'Members', value: `${members.length}`, inline: true },
-        { name: `At level ${max}`, value: `${atMax}`, inline: true },
-        { name: 'Average level', value: avg.toFixed(1), inline: true },
-      ],
-    };
+  label: 'Guild summary line (characters, average and highest level)',
+  build({ members }) {
+    if (!members.length) return { lines: ['No characters found yet.'] };
+    const avg = Math.round(members.reduce((s, m) => s + m.level, 0) / members.length);
+    const highest = Math.max(...members.map((m) => m.level));
+    const n = members.length;
+    return { lines: [`-# ${n} character${n === 1 ? '' : 's'} · average level ${avg} · highest ${highest}`] };
   },
 };

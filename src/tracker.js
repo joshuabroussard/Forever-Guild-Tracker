@@ -37,7 +37,7 @@ export async function checkGuild(pool, { guildName, guildSlug, region, locale })
 // Pulls the roster for one server's WoW guild and builds its embed.
 // Returns the embed and the tracking fields to save. On failure it keeps the
 // last good data and puts the reason in the footer.
-export async function refreshServer(pool, server, { refreshMinutes, now = new Date() }) {
+export async function refreshServer(pool, server, { refreshMinutes, emojis = {}, now = new Date() }) {
   const slug = effectiveSlug(server);
   const client = pool.for(server.region, server.locale);
   let members = server.lastMembers || [];
@@ -57,6 +57,7 @@ export async function refreshServer(pool, server, { refreshMinutes, now = new Da
     baseline: tracking.baseline,
     config: { ...server, refreshMinutes },
     guildName: displayName,
+    emojis,
     now,
     error,
   });

@@ -71,6 +71,7 @@ export function createWebServer({ env, store, bot, pool, oauth, secureCookies = 
       baseline: settings.baseline,
       config: { ...settings, refreshMinutes: env.refreshMinutes },
       guildName: settings.wowGuildDisplayName || settings.guildName,
+      emojis: bot.classEmojis ? bot.classEmojis() : {},
     });
   }
 

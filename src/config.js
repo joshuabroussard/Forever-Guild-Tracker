@@ -40,7 +40,7 @@ export const DEFAULT_SERVER = {
   channelId: null,
   color: '#3b82f6',
   sections: ['summary', 'leveling'],
-  leveling: { maxLevel: 60, top: 15, brackets: [60, 50, 40, 30, 20, 10, 1], showMovers: 5 },
+  leveling: { maxLevel: 60, top: 25 },
 };
 
 // Blizzard hasn't documented how Forever guild slugs are built. This guess
@@ -88,14 +88,7 @@ export function normalizeServerForm(form, channels = []) {
   const picked = [].concat(form.sections || []);
   const sections = Object.keys(SECTIONS).filter((id) => picked.includes(id));
   if (!sections.length) errors.push('Pick at least one thing to show.');
-  const maxLevel = int(form.maxLevel, 1, 120, 60);
-  const leveling = {
-    ...DEFAULT_SERVER.leveling,
-    maxLevel,
-    top: int(form.top, 1, 50, 15),
-    showMovers: int(form.showMovers, 0, 10, 5),
-    brackets: [maxLevel, ...DEFAULT_SERVER.leveling.brackets.filter((b) => b < maxLevel)],
-  };
+  const leveling = { ...DEFAULT_SERVER.leveling, top: int(form.top, 1, 50, 25) };
   return {
     errors,
     value: {

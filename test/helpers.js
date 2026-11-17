@@ -1,7 +1,7 @@
 export const server = {
   enabled: true, guildName: "Ashen Oath's Watch", guildSlug: '', region: 'us', locale: 'en_US',
   timezone: 'America/Chicago', channelId: '222', color: '#3b82f6', sections: ['summary', 'leveling'],
-  leveling: { maxLevel: 60, top: 15, brackets: [60, 50, 40, 30, 20, 10, 1], showMovers: 5 },
+  leveling: { maxLevel: 60, top: 25 },
 };
 
 export function roster(levels, guildName = "Ashen Oath's Watch") {

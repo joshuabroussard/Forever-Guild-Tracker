@@ -1,3 +1,5 @@
+import { CLASSES } from './classes.js';
+
 // Minimal client for Blizzard's WoW Forever API.
 // Forever isn't in Blizzard's docs yet. The namespaces and routes below are the
 // ones the community confirmed after launch (Nov 2026):
@@ -53,6 +55,20 @@ export class BlizzardClient {
     return this.get(`/data/wow/guild/${encodeURIComponent(guildSlug)}/roster`, 'profile');
   }
 
+  // URL of a class's icon. Forever's media routes aren't confirmed, so this
+  // falls back to Classic Era and then retail, which use the same icons.
+  async getClassIconUrl(classId) {
+    for (const ns of [`static-forever-${this.region}`, `static-classic1x-${this.region}`, `static-${this.region}`]) {
+      const url = `${this.host}/data/wow/media/playable-class/${classId}?namespace=${ns}`;
+      const res = await this.fetch(url, { headers: { Authorization: `Bearer ${await this.getToken()}` } });
+      if (!res.ok) continue;
+      const body = await res.json();
+      const icon = (body.assets || []).find((a) => a.key === 'icon')?.value;
+      if (icon) return icon;
+    }
+    return null;
+  }
+
   async getClassNames() {
     if (this.classNames) return this.classNames;
     try {
@@ -65,10 +81,6 @@ export class BlizzardClient {
   }
 }
 
-const FALLBACK_CLASSES = {
-  1: 'Warrior', 2: 'Paladin', 3: 'Hunter', 4: 'Rogue', 5: 'Priest',
-  7: 'Shaman', 8: 'Mage', 9: 'Warlock', 11: 'Druid',
-};
 
 // Turns Blizzard's roster response into plain member objects.
 // Forever characters have a surname; the roster field name for it isn't
@@ -84,7 +96,7 @@ export function parseRoster(body, classNames = {}) {
       name,
       level: Number(c.level) || 0,
       classId,
-      className: c.playable_class?.name || classNames[classId] || FALLBACK_CLASSES[classId] || 'Unknown',
+      className: c.playable_class?.name || classNames[classId] || CLASSES[classId]?.name || 'Unknown',
       rank: m.rank ?? null,
     };
   });

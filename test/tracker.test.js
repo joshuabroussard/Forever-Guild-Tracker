@@ -26,31 +26,41 @@ test('parseRoster maps class names and adds a surname when present', () => {
   assert.deepEqual(members[0], { id: 1, name: 'Thrall Stormborn', level: 60, classId: 1, className: 'Warrior', rank: 0 });
 });
 
-test('embed shows summary, leaderboard, brackets and today\'s gains', async () => {
+test('embed is a ranked list with class icons and today\'s gains', async () => {
   const levels = { Thrall: 60, Mira: 60, Kol: 53, Sena: 52, Bo: 12, Tiny: 4 };
   let body = roster(levels);
   const pool = new BlizzardPool({ clientId: 'x', clientSecret: 'y', fetchImpl: blizzardFetch(() => body) });
+  const emojis = { 1: '<:wow_warrior:101>' };
   let s = { ...server };
-  const first = await refreshServer(pool, s, { refreshMinutes: 15, now: new Date('2026-11-17T14:00:00Z') });
+  const first = await refreshServer(pool, s, { refreshMinutes: 15, emojis, now: new Date('2026-11-17T14:00:00Z') });
   s = { ...s, ...first.patch };
   body = roster({ ...levels, Kol: 57 });
-  const { embed, error } = await refreshServer(pool, s, { refreshMinutes: 15, now: new Date('2026-11-17T20:00:00Z') });
+  const { embed, error } = await refreshServer(pool, s, { refreshMinutes: 15, emojis, now: new Date('2026-11-17T20:00:00Z') });
 
-  const field = (n) => embed.fields.find((f) => f.name === n).value;
   assert.equal(error, null);
-  assert.equal(embed.title, "Ashen Oath's Watch progress");
-  assert.equal(field('Members'), '6');
-  assert.equal(field('At level 60'), '2');
-  assert.match(field('Top levels'), /\*\*Kol\*\* · \w+ · 57 \(\+4 today\)/);
-  assert.match(field('By level'), /^60: 2\n50–59: 2\n40–49: 0/);
-  assert.match(field('By level'), /1–9: 1$/);
-  assert.equal(field('Leveled today'), '**Kol** +4 (now 57)');
+  assert.equal(embed.title, "Ashen Oath's Watch · leveling");
+  assert.equal(embed.footer, undefined);
+  const lines = embed.description.split('\n');
+  assert.equal(lines[0], '-# 6 characters · average level 41 · highest 60');
+  assert.equal(lines[1], '');
+  assert.equal(lines[2], '🩷 `60` **Mira**');
+  assert.equal(lines[3], '<:wow_warrior:101> `60` **Thrall**');
+  assert.equal(lines[4], '🟢 `57` **Kol** +4');
+  assert.equal(lines[7], '⚫ ` 4` **Tiny**');
+  assert.doesNotMatch(embed.description, /level 10/);
+});
+
+test('characters past the list size are counted, not listed', () => {
+  const members = Array.from({ length: 30 }, (_, i) => ({ id: i, name: `C${i}`, level: 30 - i, classId: 8 }));
+  const embed = buildEmbed({ members, baseline: null, config: { ...server, leveling: { top: 25 } } });
+  assert.match(embed.description, /\n-# and 5 more$/);
+  assert.equal(embed.description.split('\n').filter((l) => l.startsWith('🩵')).length, 25);
 });
 
 test('only the sections picked on the website are shown', () => {
-  const members = [{ id: 1, name: 'A', level: 30, className: 'Mage' }];
-  const embed = buildEmbed({ members, baseline: null, config: { ...server, sections: ['summary'], refreshMinutes: 15 } });
-  assert.deepEqual(embed.fields.map((f) => f.name), ['Members', 'At level 60', 'Average level']);
+  const members = [{ id: 1, name: 'A', level: 30, classId: 8 }];
+  const embed = buildEmbed({ members, baseline: null, config: { ...server, sections: ['summary'] } });
+  assert.equal(embed.description, '-# 1 character · average level 30 · highest 30');
 });
 
 test('gains reset at local midnight, not UTC midnight', () => {
@@ -68,7 +78,7 @@ test('a missing guild keeps the last data and says why', async () => {
   const s = { ...server, lastMembers: [{ id: 1, name: 'A', level: 30, className: 'Mage' }] };
   const { embed, patch } = await refreshServer(pool, s, { refreshMinutes: 15 });
   assert.match(embed.footer.text, /not found/);
-  assert.equal(embed.fields.find((f) => f.name === 'Members').value, '1');
+  assert.match(embed.description, /^-# 1 character/);
   assert.equal(patch.lastMembers, undefined);
   assert.match(patch.lastError, /ashen-oaths-watch/);
 });
@@ -79,16 +89,17 @@ test('checkGuild reports what it found', async () => {
 });
 
 test('a 1,000-member guild stays inside Discord\'s embed limits', () => {
-  const members = Array.from({ length: 1000 }, (_, i) => ({ id: i, name: `Character${i} Longsurname`, level: (i % 60) + 1, className: 'Warlock' }));
-  const embed = buildEmbed({ members, baseline: null, config: { ...server, refreshMinutes: 15, leveling: { ...server.leveling, top: 50 } } });
+  const members = Array.from({ length: 1000 }, (_, i) => ({ id: i, name: `Character${i} Longsurname`, level: (i % 60) + 1, classId: 9 }));
+  const emojis = { 9: '<:wow_warlock:123456789012345678>' };
+  const embed = buildEmbed({ members, baseline: null, emojis, config: { ...server, leveling: { top: 50 } } });
+  assert.ok(embed.description.length <= 4096);
   assert.ok(embedLength(embed) <= 6000);
-  assert.ok(embed.fields.every((f) => f.value.length <= 1024));
 });
 
 test('settings form is validated', () => {
   const bad = normalizeServerForm({ guildName: '', region: 'xx', channelId: '9', timezone: 'Mars/Base', sections: 'nope' }, ['1']);
   assert.equal(bad.errors.length, 5);
-  const ok = normalizeServerForm({ guildName: ' Ashen Oath ', region: 'US', channelId: '1', timezone: 'Europe/Berlin', sections: ['leveling', 'summary'], top: '99', maxLevel: '60', enabled: 'on' }, ['1']);
+  const ok = normalizeServerForm({ guildName: ' Ashen Oath ', region: 'US', channelId: '1', timezone: 'Europe/Berlin', sections: ['leveling', 'summary'], top: '99', enabled: 'on' }, ['1']);
   assert.deepEqual(ok.errors, []);
   assert.equal(ok.value.guildName, 'Ashen Oath');
   assert.equal(ok.value.region, 'us');

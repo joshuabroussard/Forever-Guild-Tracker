@@ -7,7 +7,9 @@ channel up to date with the guild's leveling progress.
 - Settings site: Discord sign-in, then pick a server you manage, add the bot,
   and set the WoW guild name, region, channel and what the embed shows.
 - Bot: pulls each guild's roster from Blizzard every 15 minutes and edits its
-  embed. `/guild refresh` updates it now; `/guild settings` links the settings page.
+  embed: one ranked line per character with its class icon, level and levels
+  gained today. The bot uploads the class icons as its own emoji on first start.
+  `/guild refresh` updates it now; `/guild settings` links the settings page.
 - One Node process runs both, on `127.0.0.1:3000`, with nginx in front.
 
 ## Where the data comes from
@@ -28,7 +30,7 @@ Leveling only needs the roster, which is one API call per guild per refresh.
 
 Each part of the embed is a section in `src/sections/`. To add raids, gear or
 professions, write a new file with an `id`, a `label` and a `build()` that
-returns `{ fields }`, and register it in `src/sections/index.js`. It then shows
+returns `{ lines }` (lines of Discord markdown for the embed), and register it in `src/sections/index.js`. It then shows
 up as a checkbox on the settings page.
 
 ## Setup on chille
