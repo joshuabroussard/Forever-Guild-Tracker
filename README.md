@@ -59,8 +59,8 @@ chille if it's behind a router.
 Needs Node 22 or newer.
 
 ```
-mkdir -p ~/guild-tracker && cd ~/guild-tracker
-# unzip guild-tracker.zip here (or git clone, if it's in a repo)
+git clone https://github.com/joshuabroussard/Forever-Guild-Tracker.git ~/guild-tracker
+cd ~/guild-tracker
 npm install --omit=dev
 npm test
 cp .env.example .env && chmod 600 .env
@@ -89,6 +89,8 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now guild-tracker
 journalctl -u guild-tracker -f
 ```
+
+Update later with `git pull && npm install --omit=dev && sudo systemctl restart guild-tracker`.
 
 If Node came from nvm, change `ExecStart` to the full path from `which node`.
 
