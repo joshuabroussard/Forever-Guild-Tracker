@@ -1,0 +1,111 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { slugify, normalizeServerForm } from '../src/config.js';
+import { BlizzardClient, parseRoster } from '../src/blizzard.js';
+import { BlizzardPool, refreshServer, checkGuild } from '../src/tracker.js';
+import { buildEmbed, embedLength } from '../src/embed.js';
+import { updateBaseline } from '../src/state.js';
+import { Store } from '../src/store.js';
+import { server, roster, blizzardFetch } from './helpers.js';
+
+test('slugify matches the community-observed Forever slug format', () => {
+  assert.equal(slugify("Ashen Oath's Watch"), 'ashen-oaths-watch');
+  assert.equal(slugify('  Lök  Tar '), 'lok-tar');
+});
+
+test('roster request uses the realmless Forever profile namespace', async () => {
+  const fetch = blizzardFetch(() => roster({ A: 10 }));
+  await new BlizzardClient({ clientId: 'x', clientSecret: 'y', region: 'eu', fetchImpl: fetch }).getRoster('ashen-oaths-watch');
+  assert.ok(fetch.calls.includes('https://eu.api.blizzard.com/data/wow/guild/ashen-oaths-watch/roster?namespace=profile-forever-eu&locale=en_US'));
+});
+
+test('parseRoster maps class names and adds a surname when present', () => {
+  const body = roster({ Thrall: 60 });
+  body.members[0].character.surname = 'Stormborn';
+  const { members } = parseRoster(body, { 1: 'Warrior' });
+  assert.deepEqual(members[0], { id: 1, name: 'Thrall Stormborn', level: 60, classId: 1, className: 'Warrior', rank: 0 });
+});
+
+test('embed shows summary, leaderboard, brackets and today\'s gains', async () => {
+  const levels = { Thrall: 60, Mira: 60, Kol: 53, Sena: 52, Bo: 12, Tiny: 4 };
+  let body = roster(levels);
+  const pool = new BlizzardPool({ clientId: 'x', clientSecret: 'y', fetchImpl: blizzardFetch(() => body) });
+  let s = { ...server };
+  const first = await refreshServer(pool, s, { refreshMinutes: 15, now: new Date('2026-11-17T14:00:00Z') });
+  s = { ...s, ...first.patch };
+  body = roster({ ...levels, Kol: 57 });
+  const { embed, error } = await refreshServer(pool, s, { refreshMinutes: 15, now: new Date('2026-11-17T20:00:00Z') });
+
+  const field = (n) => embed.fields.find((f) => f.name === n).value;
+  assert.equal(error, null);
+  assert.equal(embed.title, "Ashen Oath's Watch progress");
+  assert.equal(field('Members'), '6');
+  assert.equal(field('At level 60'), '2');
+  assert.match(field('Top levels'), /\*\*Kol\*\* · \w+ · 57 \(\+4 today\)/);
+  assert.match(field('By level'), /^60: 2\n50–59: 2\n40–49: 0/);
+  assert.match(field('By level'), /1–9: 1$/);
+  assert.equal(field('Leveled today'), '**Kol** +4 (now 57)');
+});
+
+test('only the sections picked on the website are shown', () => {
+  const members = [{ id: 1, name: 'A', level: 30, className: 'Mage' }];
+  const embed = buildEmbed({ members, baseline: null, config: { ...server, sections: ['summary'], refreshMinutes: 15 } });
+  assert.deepEqual(embed.fields.map((f) => f.name), ['Members', 'At level 60', 'Average level']);
+});
+
+test('gains reset at local midnight, not UTC midnight', () => {
+  let t = {};
+  const m = (level) => [{ id: 1, level }];
+  t = updateBaseline(t, m(20), 'America/Chicago', new Date('2026-11-17T23:00:00Z'));
+  t = updateBaseline(t, m(22), 'America/Chicago', new Date('2026-11-18T03:00:00Z'));
+  assert.equal(t.baseline.levels[1], 20);
+  t = updateBaseline(t, m(23), 'America/Chicago', new Date('2026-11-18T07:00:00Z'));
+  assert.equal(t.baseline.levels[1], 22);
+});
+
+test('a missing guild keeps the last data and says why', async () => {
+  const pool = new BlizzardPool({ clientId: 'x', clientSecret: 'y', fetchImpl: blizzardFetch(() => ({}), 404) });
+  const s = { ...server, lastMembers: [{ id: 1, name: 'A', level: 30, className: 'Mage' }] };
+  const { embed, patch } = await refreshServer(pool, s, { refreshMinutes: 15 });
+  assert.match(embed.footer.text, /not found/);
+  assert.equal(embed.fields.find((f) => f.name === 'Members').value, '1');
+  assert.equal(patch.lastMembers, undefined);
+  assert.match(patch.lastError, /ashen-oaths-watch/);
+});
+
+test('checkGuild reports what it found', async () => {
+  const pool = new BlizzardPool({ clientId: 'x', clientSecret: 'y', fetchImpl: blizzardFetch(() => roster({ A: 1, B: 2 })) });
+  assert.deepEqual(await checkGuild(pool, server), { ok: true, slug: 'ashen-oaths-watch', name: "Ashen Oath's Watch", count: 2 });
+});
+
+test('a 1,000-member guild stays inside Discord\'s embed limits', () => {
+  const members = Array.from({ length: 1000 }, (_, i) => ({ id: i, name: `Character${i} Longsurname`, level: (i % 60) + 1, className: 'Warlock' }));
+  const embed = buildEmbed({ members, baseline: null, config: { ...server, refreshMinutes: 15, leveling: { ...server.leveling, top: 50 } } });
+  assert.ok(embedLength(embed) <= 6000);
+  assert.ok(embed.fields.every((f) => f.value.length <= 1024));
+});
+
+test('settings form is validated', () => {
+  const bad = normalizeServerForm({ guildName: '', region: 'xx', channelId: '9', timezone: 'Mars/Base', sections: 'nope' }, ['1']);
+  assert.equal(bad.errors.length, 5);
+  const ok = normalizeServerForm({ guildName: ' Ashen Oath ', region: 'US', channelId: '1', timezone: 'Europe/Berlin', sections: ['leveling', 'summary'], top: '99', maxLevel: '60', enabled: 'on' }, ['1']);
+  assert.deepEqual(ok.errors, []);
+  assert.equal(ok.value.guildName, 'Ashen Oath');
+  assert.equal(ok.value.region, 'us');
+  assert.equal(ok.value.leveling.top, 50);
+  assert.deepEqual(ok.value.sections, ['summary', 'leveling']);
+  assert.equal(ok.value.enabled, true);
+});
+
+test('changing the WoW guild clears old tracking; changing channel reposts', () => {
+  const store = new Store(null);
+  store.saveSettings('1', { ...server }, 'u');
+  store.patch('1', { messageId: 'm', lastMembers: [{ id: 1 }], baseline: { date: 'x', levels: {} } });
+  store.saveSettings('1', { ...server, timezone: 'Europe/Berlin' }, 'u');
+  assert.equal(store.get('1').messageId, 'm');
+  assert.ok(store.get('1').lastMembers);
+  store.saveSettings('1', { ...server, guildName: 'Other' }, 'u');
+  assert.equal(store.get('1').lastMembers, undefined);
+  store.saveSettings('1', { ...server, guildName: 'Other', channelId: '333' }, 'u');
+  assert.equal(store.get('1').messageId, null);
+});

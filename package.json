@@ -1,0 +1,17 @@
+{
+  "name": "guild-tracker-bot",
+  "version": "0.1.0",
+  "description": "Discord bot plus settings site that keeps a pinned embed of WoW Forever guilds' leveling progress up to date",
+  "type": "module",
+  "private": true,
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node --env-file=.env src/index.js",
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "discord.js": "^14.28.1"
+  }
+}
