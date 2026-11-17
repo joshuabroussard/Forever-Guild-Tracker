@@ -106,6 +106,25 @@ embed is posted and pinned in that channel.
 The bot needs View Channel, Send Messages, Embed Links, Read Message History
 and Pin Messages in that channel. The add-bot link asks for all of them.
 
+### 8. Auto-update from GitHub (optional)
+
+A systemd timer checks GitHub every 2 minutes. When `main` has moved and the
+checkout has no local edits, it fast-forwards, runs `npm install` and the
+tests, and restarts the bot only if they pass. A failing commit is rolled
+back and skipped until a newer one arrives, so the running bot is never
+replaced by broken code.
+
+```
+sudo cp deploy/guild-tracker-update.service deploy/guild-tracker-update.timer /etc/systemd/system/
+sudo nano /etc/systemd/system/guild-tracker-update.service   # APP_DIR, APP_USER, NODE_BIN_DIR, ExecStart path
+sudo systemctl daemon-reload
+sudo systemctl enable --now guild-tracker-update.timer
+journalctl -u guild-tracker-update -n 50     # what each check did
+```
+
+`git fetch` has to work without a password prompt as APP_USER (a public repo,
+or saved GitHub credentials).
+
 ## Security notes
 
 - Only people with Manage Server in a Discord server can change its settings.

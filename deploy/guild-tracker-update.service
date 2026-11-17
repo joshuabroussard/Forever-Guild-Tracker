@@ -1,0 +1,17 @@
+# /etc/systemd/system/guild-tracker-update.service
+# Run by guild-tracker-update.timer. Set the four Environment lines to match
+# chille (same user and folder as guild-tracker.service).
+
+[Unit]
+Description=Pull Forever-Guild-Tracker from GitHub and restart if it changed
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+Environment=APP_DIR=/home/josh/guild-tracker
+Environment=APP_USER=josh
+Environment=SERVICE=guild-tracker
+# Folder holding node and npm, from `dirname $(which node)` as APP_USER
+Environment=NODE_BIN_DIR=/usr/bin
+ExecStart=/bin/bash /home/josh/guild-tracker/deploy/auto-update.sh

@@ -1,0 +1,13 @@
+# /etc/systemd/system/guild-tracker-update.timer
+#   sudo systemctl enable --now guild-tracker-update.timer
+
+[Unit]
+Description=Check GitHub for guild tracker updates every 2 minutes
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec=2min
+RandomizedDelaySec=15s
+
+[Install]
+WantedBy=timers.target
