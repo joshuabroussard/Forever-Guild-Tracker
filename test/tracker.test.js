@@ -23,7 +23,7 @@ test('parseRoster maps class names and adds a surname when present', () => {
   const body = roster({ Thrall: 60 });
   body.members[0].character.surname = 'Stormborn';
   const { members } = parseRoster(body, { 1: 'Warrior' });
-  assert.deepEqual(members[0], { id: 1, name: 'Thrall Stormborn', level: 60, classId: 1, className: 'Warrior', rank: 0 });
+  assert.deepEqual(members[0], { id: 1, name: 'Thrall Stormborn', level: 60, classId: 1, className: 'Warrior', rank: 0, profilePath: '/profile/wow/character/thrall-stormborn' });
 });
 
 test('embed is a ranked list with class icons and today\'s gains', async () => {
@@ -119,4 +119,45 @@ test('changing the WoW guild clears old tracking; changing channel reposts', () 
   assert.equal(store.get('1').lastMembers, undefined);
   store.saveSettings('1', { ...server, guildName: 'Other', channelId: '333' }, 'u');
   assert.equal(store.get('1').messageId, null);
+});
+
+test('levels come from character profiles when the roster lags', async () => {
+  const body = roster({ Thrall: 30, Mira: 20, Tiny: 4 });
+  body.members[1].character.key = { href: 'https://us.api.blizzard.com/profile/wow/character/mira-dawn?namespace=profile-forever-us' };
+  const profiles = { '/profile/wow/character/thrall': { level: 33 }, '/profile/wow/character/mira-dawn': { level: 18 } };
+  const fetch = blizzardFetch(
+    (url) => profiles[new URL(url).pathname] || body,
+    (url) => (url.includes('/profile/wow/character/') && !profiles[new URL(url).pathname] ? 404 : 200),
+  );
+  const pool = new BlizzardPool({ clientId: 'x', clientSecret: 'y', fetchImpl: fetch });
+  let s = { ...server };
+  const first = await refreshServer(pool, s, { refreshMinutes: 15, now: new Date('2026-11-17T14:00:00Z') });
+  const byName = Object.fromEntries(first.patch.lastMembers.map((m) => [m.name, m.level]));
+  assert.deepEqual(byName, { Thrall: 33, Mira: 20, Tiny: 4 }); // profile ahead, profile behind, no profile
+  assert.ok(first.patch.lastMembers.every((m) => !('profilePath' in m)));
+  assert.ok(fetch.calls.some((u) => u.includes('/profile/wow/character/mira-dawn?namespace=profile-forever-us')));
+
+  s = { ...s, ...first.patch };
+  profiles['/profile/wow/character/thrall'] = { level: 35 };
+  const { embed } = await refreshServer(pool, s, { refreshMinutes: 15, now: new Date('2026-11-17T20:00:00Z') });
+  assert.match(embed.description, /`35` \*\*Thrall\*\* \+2/);
+});
+
+test('profile lookups run a few at a time and survive API errors', async () => {
+  const names = Object.fromEntries(Array.from({ length: 12 }, (_, i) => [`C${i}`, 10 + i]));
+  let inFlight = 0, peak = 0;
+  const client = {
+    async getCharacter(path) {
+      inFlight++; peak = Math.max(peak, inFlight);
+      await new Promise((r) => setTimeout(r, 5));
+      inFlight--;
+      if (path.endsWith('c3')) throw new Error('Blizzard API 503');
+      return { level: 50 };
+    },
+  };
+  const { members } = parseRoster(roster(names));
+  const out = await (await import('../src/tracker.js')).withProfileLevels(client, members);
+  assert.ok(peak <= 4);
+  assert.equal(out.find((m) => m.name === 'C3').level, 13);
+  assert.equal(out.find((m) => m.name === 'C0').level, 50);
 });

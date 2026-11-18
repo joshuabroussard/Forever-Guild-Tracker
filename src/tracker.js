@@ -34,6 +34,32 @@ export async function checkGuild(pool, { guildName, guildSlug, region, locale })
   }
 }
 
+// Fills in each member's level from their own character profile, a few at a
+// time. The roster is only trusted for who is in the guild: its levels lag.
+// If a profile can't be read (under level 10, never logged out, or an API
+// error), the roster level is kept. Levels only go up, so the higher of the
+// two wins, which also covers a profile that's older than the roster.
+export async function withProfileLevels(client, members, { concurrency = 4 } = {}) {
+  const out = new Array(members.length);
+  let next = 0;
+  async function worker() {
+    while (next < members.length) {
+      const i = next++;
+      const { profilePath, ...m } = members[i];
+      let level = m.level;
+      if (profilePath) {
+        try {
+          const profileLevel = Number((await client.getCharacter(profilePath)).level);
+          if (Number.isFinite(profileLevel) && profileLevel > level) level = profileLevel;
+        } catch { /* keep the roster level */ }
+      }
+      out[i] = { ...m, level };
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, members.length) }, worker));
+  return out;
+}
+
 // Pulls the roster for one server's WoW guild and builds its embed.
 // Returns the embed and the tracking fields to save. On failure it keeps the
 // last good data and puts the reason in the footer.
@@ -46,7 +72,7 @@ export async function refreshServer(pool, server, { refreshMinutes, emojis = {},
   let error = null;
   try {
     const parsed = parseRoster(await client.getRoster(slug), await client.getClassNames());
-    members = parsed.members;
+    members = await withProfileLevels(client, parsed.members);
     displayName = parsed.guildName || displayName;
     tracking = updateBaseline(tracking, members, server.timezone, now);
   } catch (e) {

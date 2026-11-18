@@ -55,6 +55,12 @@ export class BlizzardClient {
     return this.get(`/data/wow/guild/${encodeURIComponent(guildSlug)}/roster`, 'profile');
   }
 
+  // A character's own profile. Blizzard's guild roster can lag behind by hours,
+  // while the character profile updates when the player logs out.
+  async getCharacter(profilePath) {
+    return this.get(profilePath, 'profile');
+  }
+
   // URL of a class's icon. Forever's media routes aren't confirmed, so this
   // falls back to Classic Era and then retail, which use the same icons.
   async getClassIconUrl(classId) {
@@ -98,7 +104,23 @@ export function parseRoster(body, classNames = {}) {
       classId,
       className: c.playable_class?.name || classNames[classId] || CLASSES[classId]?.name || 'Unknown',
       rank: m.rank ?? null,
+      profilePath: characterPath(c, name),
     };
   });
   return { guildName: body.guild?.name || null, members };
+}
+
+// Path of a roster character's own profile. Uses the link Blizzard puts in the
+// roster when there is one, otherwise the community-observed Forever format
+// /profile/wow/character/{name}-{surname}, lowercase.
+export function characterPath(c, fullName) {
+  const href = c.key?.href;
+  if (href) {
+    try {
+      const { pathname } = new URL(href);
+      if (pathname.startsWith('/profile/wow/character/')) return pathname;
+    } catch { /* fall through */ }
+  }
+  const slug = String(fullName || c.name || '').trim().toLowerCase().replace(/\s+/g, '-');
+  return slug ? `/profile/wow/character/${encodeURIComponent(slug)}` : null;
 }
