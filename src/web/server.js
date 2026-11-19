@@ -125,27 +125,32 @@ export function createWebServer({ env, store, bot, pool, oauth, secureCookies = 
     const get = (sub) => client.get(`${profilePath}${sub}`, 'profile')
       .then(strip)
       .catch((e) => ({ error: e.status || e.message }));
-    const [dungeons, raids, achievements, statistics] = await Promise.all([
+    const [dungeons, raids, achievements, statistics, quests, achStats] = await Promise.all([
       get('/encounters/dungeons'), get('/encounters/raids'), get('/achievements'), get('/statistics'),
+      get('/quests/completed'), get('/achievements/statistics'),
     ]);
     return {
       dungeons,
       raids,
+      quests: quests?.quests
+        ? { total: quests.quests.length, list: quests.quests.map((q) => [q.id, q.name]) }
+        : quests,
+      achievementStatistics: achStats?.categories
+        ? achStats.categories.map((c) => ({
+            name: c.name,
+            stats: (c.statistics || []).slice(0, 60).map((x) => [x.name, x.quantity]),
+            sub: (c.sub_categories || []).map((sc) => ({ name: sc.name, stats: (sc.statistics || []).slice(0, 60).map((x) => [x.name, x.quantity]) })),
+          }))
+        : achStats,
       achievements: achievements?.achievements
         ? {
             total: achievements.total_quantity ?? achievements.achievements.length,
-            sample: achievements.achievements.slice(0, 80).map((a) => ({
+            list: achievements.achievements.map((a) => ({
               id: a.id ?? a.achievement?.id, name: a.achievement?.name, done: !!a.completed_timestamp,
             })),
           }
         : achievements,
-      statistics: statistics?.categories
-        ? statistics.categories.map((c) => ({
-            name: c.name,
-            stats: (c.statistics || []).slice(0, 40).map((x) => [x.name, x.quantity]),
-            sub: (c.sub_categories || []).map((sc) => ({ name: sc.name, stats: (sc.statistics || []).slice(0, 40).map((x) => [x.name, x.quantity]) })),
-          }))
-        : statistics,
+      statistics: statistics ? Object.keys(statistics) : statistics,
     };
   }
 
