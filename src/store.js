@@ -38,6 +38,8 @@ export class Store {
       delete next.lastLevels;
       delete next.lastMembers;
       delete next.wowGuildDisplayName;
+      delete next.dungeons;
+      delete next.dungeonsAt;
       delete next.lastError;
     }
     if (prev.channelId !== settings.channelId) next.messageId = null;

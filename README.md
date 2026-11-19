@@ -15,6 +15,11 @@ channel up to date with the guild's leveling progress.
   who leveled today, a class breakdown and the full ranked roster. Each name
   opens an armory-style character page (race, class, item level, last online,
   equipment). Turn it off per server on the settings page.
+- Dungeon first clears: the guild page lists, per dungeon, who still needs a
+  first clear (and who got partway), skipping characters below its entry
+  level. Each character page shows their cleared and still-to-do dungeons.
+  Read from `/encounters/dungeons` about once an hour; only dungeons someone
+  in the guild has run are listed, since Blizzard only reports those.
 - One Node process runs both, on `127.0.0.1:3000`, with nginx in front.
 
 ## Where the data comes from

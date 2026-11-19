@@ -154,6 +154,12 @@ test('guild and character pages are public, ranked, and escaped', async () => {
       { id: 2, name: 'Mira', level: 22, classId: 5, className: 'Priest' },
       { id: 3, name: 'Bo', level: 22, classId: 1, className: 'Warrior' },
     ],
+    dungeons: {
+      1: { 10: { name: 'The Deadmines', status: 'done', clears: 3 } },
+      2: { 10: { name: 'The Deadmines', status: 'partial', clears: 0 } },
+      3: {},
+    },
+    dungeonsAt: '2026-11-18T20:00:00Z',
   });
   const res = await get('/g/us/ashen-oaths-watch');
   assert.equal(res.status, 200);
@@ -163,12 +169,18 @@ test('guild and character pages are public, ranked, and escaped', async () => {
   assert.match(html, /👑 .*Thrall Stormborn <span class="gain">\+5<\/span>/);
   assert.match(html, /<td class="n">2<\/td>.*Bo.*<td class="n">2<\/td>.*Mira/s); // tied levels share a place
   assert.match(html, /href="\/g\/us\/ashen-oaths-watch\/thrall-stormborn"/);
+  const needs = html.slice(html.indexOf('Who still needs a first clear'));
+  assert.match(needs, /The Deadmines <span class="muted">17\+<\/span>/);
+  assert.match(needs, /1 of 3 cleared/);
+  assert.match(needs, /Bo <span class="muted">22<\/span><\/a>.*Mira <span class="muted">22<\/span> <span class="muted">partway/s);
 
   const char = await get('/g/us/ashen-oaths-watch/thrall-stormborn');
   assert.equal(char.status, 200);
   const ch = await char.text();
   assert.match(ch, /#1 of 3 by level/);
   assert.match(ch, /\+5 levels/);
+  assert.match(ch, /✓ The Deadmines <span class="muted">×3/);
+  assert.match(await (await get('/g/us/ashen-oaths-watch/bo')).text(), /Still needs a first clear.*The Deadmines/s);
 
   assert.equal((await get('/g/us/ashen-oaths-watch/nobody')).status, 404);
   assert.equal((await get('/g/us/some-other-guild')).status, 404);

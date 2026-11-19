@@ -3,6 +3,7 @@ import { CLASSES } from '../classes.js';
 import { sortByLevel } from '../sections/leveling.js';
 import { characterPagePath, guildPath } from '../links.js';
 import { localDate } from '../state.js';
+import { dungeonBoard } from '../dungeons.js';
 
 // Public pages: a guild summary with the full ranked roster, and an
 // armory-style page per character. Everything shown is already public on
@@ -41,6 +42,35 @@ function lastSeen(ts, timezone, now = new Date()) {
   if (days <= 0) return 'today';
   if (days === 1) return 'yesterday';
   return `${days} days ago`;
+}
+
+function personChip(server, m, emojis, extra = '') {
+  return `<a class="chip" style="color:inherit;text-decoration:none" href="${esc(characterPagePath(server, m.name))}">${classIconHtml(m.classId, emojis)} ${esc(m.name)} <span class="muted">${m.level}</span>${extra}</a>`;
+}
+
+// One card per dungeon: who still needs a first clear, and who got partway.
+// Dungeons nobody needs fold into one line at the end.
+function dungeonsCard(server, members, emojis) {
+  if (!server.dungeons || !Object.keys(server.dungeons).length) return '';
+  const board = dungeonBoard(members, server.dungeons);
+  if (!board.length) return '';
+  const open = board.filter((d) => d.needs.length || d.partial.length);
+  const cleared = board.filter((d) => !d.needs.length && !d.partial.length && d.done.length);
+  const rows = open.map((d) => {
+    const level = d.minLevel ? `<span class="muted">${d.minLevel}+</span>` : '';
+    const total = d.done.length + d.partial.length + d.needs.length;
+    const needs = d.needs.map((m) => personChip(server, m, emojis)).join('');
+    const partial = d.partial.map((m) => personChip(server, m, emojis, ' <span class="muted">partway</span>')).join('');
+    return `<div class="row" style="display:block"><div style="display:flex;justify-content:space-between;gap:8px"><b>${esc(d.name)} ${level}</b><span class="muted">${d.done.length} of ${total} cleared</span></div>
+<div class="chips" style="margin-top:6px">${needs}${partial}</div></div>`;
+  }).join('');
+  const clearedLine = cleared.length
+    ? `<p class="muted" style="margin:12px 0 0">Everyone high enough has cleared ${cleared.map((d) => esc(d.name)).join(', ')}.</p>`
+    : '';
+  const when = server.dungeonsAt ? formatTime(server.dungeonsAt, server.timezone) : null;
+  return `<div class="card"><h2>Who still needs a first clear</h2>
+<p class="muted" style="margin-top:-6px">Dungeons anyone in the guild has run. Characters below a dungeon's entry level aren't listed.${when ? ` Checked ${esc(when)}.` : ''}</p>
+${rows || '<p>Everyone high enough has cleared every dungeon the guild has run.</p>'}${clearedLine}</div>`;
 }
 
 export function guildPage({ server, members, emojis = {}, user, csrf }) {
@@ -82,9 +112,26 @@ export function guildPage({ server, members, emojis = {}, user, csrf }) {
 <div class="stat"><b>${gainedToday}</b><span class="muted">levels gained today</span></div>
 </div></div>
 ${moversHtml}
+${dungeonsCard(server, members, emojis)}
 <div class="card"><h2>Classes</h2><div class="chips">${chips || '<span class="muted">No characters yet.</span>'}</div></div>
 <div class="card"><h2>Ranking</h2><table class="rank">${rows}</table></div>`;
   return page(`${name} · guild`, body, user, csrf);
+}
+
+function characterDungeons(server, member) {
+  const mine = server.dungeons?.[member.id];
+  if (!mine) return '';
+  const board = dungeonBoard([member], server.dungeons);
+  const todo = board.filter((d) => d.needs.length);
+  const partway = board.filter((d) => d.partial.length);
+  const done = board.filter((d) => d.done.length);
+  const list = (items, fmt) => items.map(fmt).join('');
+  const line = (label, items) => items ? `<div style="margin-top:8px"><span class="muted">${label}</span><div class="chips" style="margin-top:4px">${items}</div></div>` : '';
+  return `<div class="card"><h2>Dungeons</h2>
+${line('Still needs a first clear', list(todo, (d) => `<span class="chip">${esc(d.name)}${d.minLevel ? ` <span class="muted">${d.minLevel}+</span>` : ''}</span>`))}
+${line('Partway', list(partway, (d) => `<span class="chip">${esc(d.name)}</span>`))}
+${line('Cleared', list(done, (d) => `<span class="chip">✓ ${esc(d.name)}${d.done[0].clears > 1 ? ` <span class="muted">×${d.done[0].clears}</span>` : ''}</span>`))}
+${!todo.length && !partway.length && !done.length ? '<p class="muted">No dungeon runs yet.</p>' : ''}</div>`;
 }
 
 export function characterPage({ server, member, ranked, armory, emojis = {}, user, csrf, now = new Date() }) {
@@ -116,9 +163,10 @@ export function characterPage({ server, member, ranked, armory, emojis = {}, use
     gear = `<div class="card"><p class="muted" style="margin:0">Couldn't reach Blizzard's armory just now, so gear isn't shown. Try again in a few minutes.</p></div>`;
   }
 
+  const dungeonsHtml = characterDungeons(server, member);
   const body = `<p style="margin:0 0 12px"><a href="${esc(guildPath(server))}">← ${esc(guildName)}</a></p>
 <div class="card"><div class="hero">${image}<div><h2 style="font-size:24px;margin:0">${esc(member.name)}</h2>
 ${a?.title ? `<div class="muted">${esc(a.title.replace('{name}', member.name))}</div>` : ''}
-<div>${esc(subtitle)}</div></div></div>${factsHtml}</div>${gear}`;
+<div>${esc(subtitle)}</div></div></div>${factsHtml}</div>${dungeonsHtml}${gear}`;
   return page(`${member.name} · ${guildName}`, body, user, csrf);
 }

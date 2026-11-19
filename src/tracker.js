@@ -3,6 +3,9 @@ import { updateBaseline } from './state.js';
 import { buildEmbed } from './embed.js';
 import { effectiveSlug } from './config.js';
 import { guildUrl } from './links.js';
+import { fetchDungeons } from './dungeons.js';
+
+const DUNGEON_EVERY_MS = 60 * 60_000;
 
 // One Blizzard client per region, shared by every server.
 export class BlizzardPool {
@@ -71,11 +74,16 @@ export async function refreshServer(pool, server, { refreshMinutes, emojis = {},
   let displayName = server.wowGuildDisplayName || server.guildName;
   let tracking = { baseline: server.baseline, lastLevels: server.lastLevels };
   let error = null;
+  let dungeonPatch = {};
   try {
     const parsed = parseRoster(await client.getRoster(slug), await client.getClassNames());
     members = await withProfileLevels(client, parsed.members);
     displayName = parsed.guildName || displayName;
     tracking = updateBaseline(tracking, members, server.timezone, now);
+    // Dungeon clears change slowly, so they're read about once an hour.
+    if (!server.dungeonsAt || now - new Date(server.dungeonsAt) >= DUNGEON_EVERY_MS) {
+      dungeonPatch = { dungeons: await fetchDungeons(client, members, server.dungeons || {}), dungeonsAt: now.toISOString() };
+    }
   } catch (e) {
     error = describeError(e, slug);
   }
@@ -94,6 +102,6 @@ export async function refreshServer(pool, server, { refreshMinutes, emojis = {},
     error,
     patch: error
       ? { lastError: error, lastAttemptAt: now.toISOString() }
-      : { ...tracking, lastMembers: members, wowGuildDisplayName: displayName, lastError: null, lastRefreshAt: now.toISOString() },
+      : { ...tracking, ...dungeonPatch, lastMembers: members, wowGuildDisplayName: displayName, lastError: null, lastRefreshAt: now.toISOString() },
   };
 }

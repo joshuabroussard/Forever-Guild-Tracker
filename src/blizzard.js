@@ -61,6 +61,10 @@ export class BlizzardClient {
     return this.get(profilePath, 'profile');
   }
 
+  async getDungeons(profilePath) {
+    return this.get(`${profilePath}/encounters/dungeons`, 'profile');
+  }
+
   // URL of a class's icon. Forever's media routes aren't confirmed, so this
   // falls back to Classic Era and then retail, which use the same icons.
   async getClassIconUrl(classId) {

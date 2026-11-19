@@ -198,3 +198,65 @@ test('armory details are parsed and cached', async () => {
   assert.equal(calls, 6);
   assert.equal(parseCharacter({}, null, { assets: [{ key: 'inset', value: 'https://evil.example/x.jpg' }] }).image, null);
 });
+
+const dungeonBody = (list) => ({
+  expansions: [{ expansion: { name: 'Classic' }, instances: list.map(([id, name, status, kills]) => ({
+    instance: { id, name },
+    modes: [{ difficulty: { type: 'NORMAL' }, status: { type: status }, progress: {
+      completed_count: kills.filter((k) => k > 0).length, total_count: kills.length,
+      encounters: kills.map((k, i) => ({ encounter: { id: i }, completed_count: k })),
+    } }],
+  })) }],
+});
+
+test('dungeon progress is parsed into cleared and partway', async () => {
+  const { parseDungeons } = await import('../src/dungeons.js');
+  const d = parseDungeons(dungeonBody([[1, 'The Deadmines', 'COMPLETE', [3, 2, 2]], [2, 'Wailing Caverns', 'IN_PROGRESS', [1, 0, 0]]]));
+  assert.deepEqual(d, { 1: { name: 'The Deadmines', status: 'done', clears: 2 }, 2: { name: 'Wailing Caverns', status: 'partial', clears: 0 } });
+  assert.deepEqual(parseDungeons({}), {});
+});
+
+test('dungeon board lists who still needs a first clear, skipping characters too low', async () => {
+  const { dungeonBoard } = await import('../src/dungeons.js');
+  const members = [
+    { id: 1, name: 'Thrall', level: 30, classId: 7 },
+    { id: 2, name: 'Mira', level: 20, classId: 5 },
+    { id: 3, name: 'Bo', level: 15, classId: 1 },
+    { id: 4, name: 'Tiny', level: 4, classId: 1 },
+  ];
+  const board = dungeonBoard(members, {
+    1: { 10: { name: 'The Deadmines', status: 'done', clears: 1 }, 11: { name: 'Shadowfang Keep', status: 'partial', clears: 0 } },
+    2: {},
+    3: { 10: { name: 'The Deadmines', status: 'partial', clears: 0 } },
+  });
+  const dm = board.find((d) => d.name === 'The Deadmines');
+  assert.equal(dm.minLevel, 17);
+  assert.deepEqual(dm.done.map((m) => m.name), ['Thrall']);
+  assert.deepEqual(dm.needs.map((m) => m.name), ['Mira']); // Bo is 15, below 17; Tiny has no data
+  assert.deepEqual(dm.partial.map((m) => m.name), []);
+  const sfk = board.find((d) => d.name === 'Shadowfang Keep');
+  assert.deepEqual(sfk.partial.map((m) => m.name), ['Thrall']);
+  assert.deepEqual(sfk.needs.map((m) => m.name), []); // Mira is 20, below 22
+  assert.deepEqual(board.map((d) => d.name), ['The Deadmines', 'Shadowfang Keep']);
+});
+
+test('dungeons are read about once an hour, only for level 10+', async () => {
+  let dungeonCalls = 0;
+  const body = roster({ Thrall: 30, Tiny: 4 });
+  const fetch = blizzardFetch((url) => {
+    if (url.includes('/encounters/dungeons')) { dungeonCalls++; return dungeonBody([[1, 'The Deadmines', 'COMPLETE', [1]]]); }
+    if (url.includes('/profile/wow/character/thrall')) return { level: 30 };
+    if (url.includes('/profile/wow/character/')) return {};
+    return body;
+  });
+  const pool = new BlizzardPool({ clientId: 'x', clientSecret: 'y', fetchImpl: fetch });
+  let s = { ...server };
+  const t0 = new Date('2026-11-19T06:00:00Z');
+  s = { ...s, ...(await refreshServer(pool, s, { refreshMinutes: 15, now: t0 })).patch };
+  assert.equal(dungeonCalls, 1); // Tiny is under 10, so only Thrall
+  assert.equal(s.dungeons[1][1].status, 'done');
+  s = { ...s, ...(await refreshServer(pool, s, { refreshMinutes: 15, now: new Date(t0.getTime() + 15 * 60_000) })).patch };
+  assert.equal(dungeonCalls, 1);
+  s = { ...s, ...(await refreshServer(pool, s, { refreshMinutes: 15, now: new Date(t0.getTime() + 61 * 60_000) })).patch };
+  assert.equal(dungeonCalls, 2);
+});
