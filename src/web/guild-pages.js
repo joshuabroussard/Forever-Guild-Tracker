@@ -150,7 +150,7 @@ main{max-width:1000px}
 .badge b{color:var(--text);font-weight:700}
 .doll{display:grid;grid-template-columns:minmax(0,1fr) minmax(160px,300px) minmax(0,1fr);gap:8px;margin-top:16px;align-items:start}
 .col{display:flex;flex-direction:column;gap:6px;min-width:0}.col.r .slot{flex-direction:row-reverse;text-align:right}.col.r .tip{left:auto;right:0}
-.fig{display:flex;align-items:flex-end;justify-content:center;min-height:360px}.fig img{max-width:100%;max-height:520px;object-fit:contain}
+.fig{height:440px;overflow:hidden}.fig img{width:100%;height:100%;object-fit:contain;transform:scale(1.5);transform-origin:50% 62%}
 .weap{display:flex;justify-content:center;gap:12px;margin-top:8px;flex-wrap:wrap}.weap .slot{width:240px}
 .slot{position:relative;display:flex;align-items:center;gap:8px;padding:4px;border-radius:8px;outline:none;cursor:default;min-width:0}
 .slot:hover,.slot:focus{background:#ffffff10}
@@ -167,7 +167,7 @@ main{max-width:1000px}
 .sheet .grp{background:#ffffff08;border-radius:10px;padding:10px 12px}.sheet h3{margin:0 0 6px;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;font-weight:700}
 .sheet .kv{display:flex;justify-content:space-between;font-size:14px;padding:2px 0}.sheet .kv span:last-child{font-variant-numeric:tabular-nums;font-weight:600}
 @media (max-width:700px){.armory{padding:14px 12px}.ahead h2{font-size:24px}
-.doll{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:4px 6px}.fig{grid-column:1/3;order:-1;min-height:0;align-items:center}.fig img{max-height:240px}
+.doll{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:4px 6px}.fig{grid-column:1/3;order:-1;height:250px}.fig img{transform:scale(2.1)}
 .col.r .slot{flex-direction:row;text-align:left}
 .slot{gap:6px;padding:3px}.slot .ic{width:36px;height:36px}
 .slot .nm{font-size:13px}.slot .nm b{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
