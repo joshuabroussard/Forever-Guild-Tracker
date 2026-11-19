@@ -182,6 +182,13 @@ test('guild and character pages are public, ranked, and escaped', async () => {
   assert.match(ch, /✓ The Deadmines <span class="muted">×3/);
   assert.match(await (await get('/g/us/ashen-oaths-watch/bo')).text(), /Still needs a first clear.*The Deadmines/s);
 
+  const raw = await get('/g/us/ashen-oaths-watch/thrall-stormborn/raw');
+  assert.equal(raw.status, 200);
+  assert.match(raw.headers.get('content-type'), /application\/json/);
+  const rawBody = await raw.json();
+  assert.ok('dungeons' in rawBody && 'achievements' in rawBody && 'statistics' in rawBody);
+  assert.equal((await get('/g/us/ashen-oaths-watch/thrall-stormborn/other')).status, 404);
+
   assert.equal((await get('/g/us/ashen-oaths-watch/nobody')).status, 404);
   assert.equal((await get('/g/us/some-other-guild')).status, 404);
   assert.equal((await get('/g/us/%E0%A4%A')).status, 404);

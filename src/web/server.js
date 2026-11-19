@@ -98,7 +98,8 @@ export function createWebServer({ env, store, bot, pool, oauth, secureCookies = 
     }
     const user = session?.user;
     const csrf = session?.csrf;
-    const server = REGIONS.includes(region) && slug && parts.length <= 3 ? publicGuild(region, slug) : null;
+    const raw = parts.length === 4 && parts[3] === 'raw';
+    const server = REGIONS.includes(region) && slug && (parts.length <= 3 || raw) ? publicGuild(region, slug) : null;
     if (!server) return send(res, 404, errorPage(404, 'No public page for that guild here.', user, csrf));
     const emojis = bot.classEmojis ? bot.classEmojis() : {};
     const members = server.lastMembers;
@@ -107,9 +108,51 @@ export function createWebServer({ env, store, bot, pool, oauth, secureCookies = 
     const member = members.find((m) => charSlug(m.name) === who);
     if (!member) return send(res, 404, errorPage(404, 'That character isn\'t in this guild.', user, csrf));
     const path = member.profilePath || characterPath({}, member.name);
+    if (raw) {
+      const body = await rawGameData(armory.pool.for(server.region, server.locale), path);
+      res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', ...cache, 'X-Robots-Tag': 'noindex' });
+      return res.end(JSON.stringify(body, null, 1));
+    }
     const details = await armory.character(server.region, server.locale, path).catch((e) => ({ error: e.message }));
     const ranked = rankMembers(members, server.baseline);
     return send(res, 200, characterPage({ server, member, ranked, armory: details, emojis, user, csrf }), cache);
+  }
+
+  // What Blizzard says about a character's dungeons, achievements and
+  // statistics, unparsed, so the dungeon reader can be matched to Forever's
+  // real answers. Public game data only; no keys or tokens.
+  async function rawGameData(client, profilePath) {
+    const get = (sub) => client.get(`${profilePath}${sub}`, 'profile')
+      .then(strip)
+      .catch((e) => ({ error: e.status || e.message }));
+    const [dungeons, raids, achievements, statistics] = await Promise.all([
+      get('/encounters/dungeons'), get('/encounters/raids'), get('/achievements'), get('/statistics'),
+    ]);
+    return {
+      dungeons,
+      raids,
+      achievements: achievements?.achievements
+        ? {
+            total: achievements.total_quantity ?? achievements.achievements.length,
+            sample: achievements.achievements.slice(0, 80).map((a) => ({
+              id: a.id ?? a.achievement?.id, name: a.achievement?.name, done: !!a.completed_timestamp,
+            })),
+          }
+        : achievements,
+      statistics: statistics?.categories
+        ? statistics.categories.map((c) => ({
+            name: c.name,
+            stats: (c.statistics || []).slice(0, 40).map((x) => [x.name, x.quantity]),
+            sub: (c.sub_categories || []).map((sc) => ({ name: sc.name, stats: (sc.statistics || []).slice(0, 40).map((x) => [x.name, x.quantity]) })),
+          }))
+        : statistics,
+    };
+  }
+
+  function strip(body) {
+    if (!body || typeof body !== 'object') return body;
+    const { _links, character, ...rest } = body;
+    return rest;
   }
 
   function messageUrl(serverId, s) {
