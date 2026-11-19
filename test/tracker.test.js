@@ -273,6 +273,7 @@ test('dungeon board covers every Forever dungeon and lists everyone who has not 
   assert.equal(board.at(-1).name, 'Mystery Vault');
   const dm = board.find((d) => d.name === 'Deadmines');
   assert.deepEqual(dm.levels, [17, 26]);
+  assert.equal(board.find((d) => d.name === 'Scarlet Monastery Library').short, 'SM Library');
   assert.deepEqual(dm.done.map((m) => m.name), ['Thrall']);
   assert.deepEqual(dm.partial.map((m) => m.name), ['Bo']);
   assert.deepEqual(dm.needs.map((m) => m.name), ['Mira', 'Tiny']); // low levels and no-data characters still listed

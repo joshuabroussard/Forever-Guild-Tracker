@@ -170,11 +170,13 @@ test('guild and character pages are public, ranked, and escaped', async () => {
   assert.match(html, /👑 <a href="\/g\/us\/ashen-oaths-watch\/thrall-stormborn"[^>]*>Thrall Stormborn<\/a> <span class="gain">\+5<\/span>/);
   assert.match(html, /<td class="n">2<\/td>.*Bo.*<td class="n">2<\/td>.*Mira/s); // tied levels share a place
   const dg = html.slice(html.indexOf('<h2>Dungeons</h2>'));
-  assert.match(dg, /<input type="radio" name="dg" id="dg-deadmines" checked>/);
-  assert.match(dg, /<label for="dg-deadmines" class="pill">Deadmines<span class="pc">2<\/span><\/label>/);
-  assert.match(dg, /#dg-deadmines:checked~\.panels #p-dg-deadmines\{display:block\}/);
-  assert.match(dg, /<b>Deadmines<\/b><span class="lv">17–26<\/span><span class="ct"><b>1<\/b>\/3<\/span>/);
-  assert.match(dg, /<label for="dg-ragefire-chasm" class="pill">Ragefire Chasm<span class="pc">3<\/span>/); // every dungeon, even with no clears
+  assert.match(dg, /<div class="panel def" id="d-deadmines"><div class="dh"><b>Deadmines<\/b><span class="lv">17–26<\/span><span class="ct"><b>1<\/b>\/3<\/span>/);
+  assert.match(dg, /<a class="tile def" href="#d-deadmines"><span class="tn">Deadmines<\/span>.*<span class="tc">1\/3<\/span><\/span><\/a>/);
+  assert.match(dg, /<a class="tile none" href="#d-ragefire-chasm">/); // every dungeon, even with no clears
+  assert.match(dg, /<span class="tn">SM Graveyard<\/span>/);
+  assert.match(dg, /<details class="band" open><summary>Level 13–19<span>5<\/span>/);
+  assert.match(dg, /<details class="band" open><summary>Level 50–60<span>12<\/span>/); // Thrall is 60, so it's open
+  assert.match(dg, /\.dgs:has\(#d-deadmines:target\) a\[href="#d-deadmines"\]/);
   const notYet = dg.slice(dg.indexOf('Not yet'), dg.indexOf('>Done '));
   assert.match(notYet, /Bo<\/span>.*Mira<\/span><span class="pl">22<\/span><span class="px">partway<\/span>/s);
   assert.match(dg.slice(dg.indexOf('>Done ')), /Thrall Stormborn<\/span><span class="pl">60<\/span><span class="px">×3<\/span>/);

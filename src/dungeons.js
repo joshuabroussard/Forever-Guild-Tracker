@@ -26,12 +26,12 @@ export const DUNGEONS = [
   { name: 'City of Dalaran', levels: [28, 33], forever: true, aliases: ['dalaran'] },
   { name: 'Razorfen Kraul', levels: [29, 38] },
   { name: 'Gnomeregan', levels: [29, 38] },
-  { name: 'Scarlet Monastery Graveyard', levels: [30, 38], bosses: ['bloodmage thalnos'] },
-  { name: 'Scarlet Monastery Library', levels: [33, 41], bosses: ['arcanist doan'] },
+  { name: 'Scarlet Monastery Graveyard', short: 'SM Graveyard', levels: [30, 38], bosses: ['bloodmage thalnos'] },
+  { name: 'Scarlet Monastery Library', short: 'SM Library', levels: [33, 41], bosses: ['arcanist doan'] },
   { name: 'The Drowned City', levels: [35, 40], forever: true, aliases: ['drowned city'] },
-  { name: 'Scarlet Monastery Armory', levels: [36, 44], bosses: ['herod'] },
+  { name: 'Scarlet Monastery Armory', short: 'SM Armory', levels: [36, 44], bosses: ['herod'] },
   { name: 'Razorfen Downs', levels: [37, 46] },
-  { name: 'Scarlet Monastery Cathedral', levels: [38, 46], bosses: ['high inquisitor whitemane', 'scarlet commander mograine'] },
+  { name: 'Scarlet Monastery Cathedral', short: 'SM Cathedral', levels: [38, 46], bosses: ['high inquisitor whitemane', 'scarlet commander mograine'] },
   { name: "Krol'dok Stronghold", levels: [40, 45], forever: true },
   { name: 'Uldaman', levels: [41, 51] },
   { name: "Zul'Farrak", levels: [44, 54] },
@@ -40,15 +40,15 @@ export const DUNGEONS = [
   { name: 'Sunken Temple', levels: [50, 60], aliases: ["temple of atal'hakkar", 'the temple of atal hakkar'] },
   { name: 'Blackrock Depths', levels: [52, 60] },
   { name: 'Dire Maul East', levels: [54, 60], bosses: ['alzzin the wildshaper'] },
-  { name: 'Lower Blackrock Spire', levels: [55, 60], bosses: ['overlord wyrmthalak'] },
+  { name: 'Lower Blackrock Spire', short: 'Lower BRS', levels: [55, 60], bosses: ['overlord wyrmthalak'] },
   { name: 'Blackmaw Hold', levels: [55, 60], forever: true },
   { name: 'Dire Maul West', levels: [56, 60], bosses: ['prince tortheldrin', "immol'thar"] },
   { name: 'Dire Maul North', levels: [56, 60], bosses: ['king gordok'] },
   { name: "Shaper's Terrace", levels: [58, 60], forever: true, aliases: ['shapers terrace'] },
-  { name: 'Stratholme Main Gate', levels: [58, 60], bosses: ['balnazzar'] },
-  { name: 'Stratholme Service Gate', levels: [58, 60], bosses: ['baron rivendare'] },
+  { name: 'Stratholme Main Gate', short: 'Strat Main Gate', levels: [58, 60], bosses: ['balnazzar'] },
+  { name: 'Stratholme Service Gate', short: 'Strat Service Gate', levels: [58, 60], bosses: ['baron rivendare'] },
   { name: 'Scholomance', levels: [58, 60] },
-  { name: 'Upper Blackrock Spire', levels: [59, 60], bosses: ['general drakkisath'] },
+  { name: 'Upper Blackrock Spire', short: 'Upper BRS', levels: [59, 60], bosses: ['general drakkisath'] },
 ];
 
 const norm = (s) => String(s || '').toLowerCase().replace(/[:\-–()]/g, ' ').replace(/['’]/g, "'").replace(/\s+/g, ' ').trim();
@@ -213,11 +213,11 @@ export function dungeonBoard(members, byMember = {}) {
     }
   }
   const list = [
-    ...DUNGEONS.map((d) => ({ id: d.id, name: d.name, levels: d.levels, forever: !!d.forever })),
+    ...DUNGEONS.map((d) => ({ id: d.id, name: d.name, short: d.short, levels: d.levels, forever: !!d.forever })),
     ...[...extra.entries()].map(([id, name]) => ({ id, name, levels: null, forever: false })),
   ];
   const byLevel = (a, b) => b.level - a.level || a.name.localeCompare(b.name);
-  return list.map(({ id, name, levels, forever }) => {
+  return list.map(({ id, name, short, levels, forever }) => {
     const done = [];
     const partial = [];
     const needs = [];
@@ -226,6 +226,6 @@ export function dungeonBoard(members, byMember = {}) {
       if (d?.status === 'done') done.push({ ...m, clears: d.clears });
       else (d?.status === 'partial' ? partial : needs).push(m);
     }
-    return { id, name, levels, minLevel: levels?.[0] ?? null, forever, done: done.sort(byLevel), partial: partial.sort(byLevel), needs: needs.sort(byLevel) };
+    return { id, name, short: short || name, levels, minLevel: levels?.[0] ?? null, forever, done: done.sort(byLevel), partial: partial.sort(byLevel), needs: needs.sort(byLevel) };
   });
 }

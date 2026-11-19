@@ -35,11 +35,16 @@ const GUILD_CSS = `
 .gh .meta{color:var(--muted);font-size:13px;margin-top:6px}
 .comp{display:flex;height:6px;border-radius:3px;overflow:hidden;margin-top:12px;gap:2px}.comp span{display:block;height:100%}
 .today{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;font-size:14px;margin:-6px 0 14px}.today a{text-decoration:none;font-weight:600}
-.dgs input{position:absolute;opacity:0;pointer-events:none}
-.pills{display:flex;gap:6px;overflow-x:auto;padding-bottom:4px;margin:0 -16px 14px;padding-left:16px;padding-right:16px;scrollbar-width:none}.pills::-webkit-scrollbar{display:none}
-.pill{flex:0 0 auto;display:inline-flex;align-items:center;gap:6px;padding:7px 12px;border-radius:999px;background:var(--card2);font-size:14px;font-weight:600;cursor:pointer;white-space:nowrap;user-select:none}
-.pill .pc{font-size:12px;font-weight:700;background:#ffffff1c;border-radius:999px;padding:0 7px;line-height:18px}.pill .pd{font-size:12px;opacity:.7}
-.panel{display:none}.dh{display:flex;align-items:baseline;gap:8px}.dh b{font-weight:700;font-size:18px}.dh .lv{color:var(--muted);font-size:13px}.dh .ct{margin-left:auto;font-size:14px;color:var(--muted)}.dh .ct b{color:var(--text);font-size:14px}
+.panel{display:none;scroll-margin-top:12px}.panel:target,.panels:not(:has(.panel:target)) .panel.def{display:block}
+.pick{margin-top:18px;border-top:1px solid var(--line);padding-top:6px}
+.band summary{list-style:none;cursor:pointer;display:flex;align-items:center;gap:8px;padding:10px 0;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}.band summary::-webkit-details-marker{display:none}
+.band summary span{font-weight:600;letter-spacing:0;margin-left:auto}.band summary::after{content:'+';font-size:16px;line-height:1;width:12px;text-align:center}.band[open] summary::after{content:'–'}
+.tiles{display:grid;grid-template-columns:repeat(auto-fill,minmax(104px,1fr));gap:6px;padding-bottom:8px}
+.tile{display:flex;flex-direction:column;justify-content:space-between;gap:8px;min-height:58px;padding:9px 10px;border-radius:10px;background:var(--card2);border:1px solid transparent;color:var(--text);text-decoration:none}
+.tile .tn{font-size:13px;font-weight:600;line-height:1.25;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.tile .tf{display:flex;align-items:center;gap:6px}.tile .tb{flex:1;height:3px;border-radius:2px;background:#ffffff14;overflow:hidden}.tile .tb i{display:block;height:100%;background:var(--accent)}
+.tile .tc{font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}.tile.none .tn{color:var(--muted)}.tile.all{border-color:#46d98a55}.tile.all .tb i{background:var(--ok)}
+.dh{display:flex;align-items:baseline;gap:8px}.dh b{font-weight:700;font-size:18px}.dh .lv{color:var(--muted);font-size:13px}.dh .ct{margin-left:auto;font-size:14px;color:var(--muted)}.dh .ct b{color:var(--text);font-size:14px}
 .pb{height:4px;border-radius:2px;background:var(--card2);margin:10px 0 14px;overflow:hidden}.pb span{display:block;height:100%;background:var(--accent);border-radius:2px}
 .cols{display:grid;grid-template-columns:1fr 1fr;gap:16px}@media (max-width:520px){.cols{grid-template-columns:1fr;gap:14px}}
 .gt{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}.gt span{color:var(--text)}
@@ -64,33 +69,44 @@ function personRow(server, m, emojis, right = '') {
   return `<a class="pr" href="${esc(characterPagePath(server, m.name))}">${classIconHtml(m.classId, emojis)}<span class="pn" style="color:${hex(CLASSES[m.classId]?.color)}">${esc(m.name)}</span><span class="pl">${m.level}</span>${right}</a>`;
 }
 
-// Dungeon picker: tap a dungeon to see who has and hasn't cleared it. Pure
-// CSS (radio buttons), since the site runs no scripts.
+const BANDS = [[10, 19], [20, 29], [30, 39], [40, 49], [50, 60]];
+
+// Dungeon picker: the chosen dungeon's done and not-done lists on top, then a
+// grid of every dungeon grouped by level. Tiles are links to the dungeon's
+// panel (#d-…), shown with :target, so a tap jumps straight to the lists.
+// No scripts, since the site's CSP allows none. Level bands nobody in the
+// guild has reached start folded.
 function dungeonsCard(server, members, emojis) {
   if (!server.dungeons || !Object.keys(server.dungeons).length) return '';
   const board = dungeonBoard(members, server.dungeons);
   if (!board.length) return '';
   const first = board.find((d) => d.done.length && (d.needs.length || d.partial.length)) || board.find((d) => d.done.length) || board[0];
-  const ids = board.map((d) => `dg-${slugId(d.id)}`);
-  const radios = board.map((d, i) => `<input type="radio" name="dg" id="${ids[i]}"${d === first ? ' checked' : ''}>`).join('');
-  const pills = board.map((d, i) => {
-    const todo = d.needs.length + d.partial.length;
-    return `<label for="${ids[i]}" class="pill">${esc(d.name)}${todo ? `<span class="pc">${todo}</span>` : '<span class="pd">✓</span>'}</label>`;
-  }).join('');
-  const panels = board.map((d, i) => {
-    const total = d.done.length + d.partial.length + d.needs.length;
+  const pid = (d) => `d-${slugId(d.id)}`;
+  const total = members.length;
+  const panels = board.map((d) => {
     const pct = total ? Math.round((d.done.length / total) * 100) : 0;
     const level = d.levels ? `<span class="lv">${d.levels[0]}–${d.levels[1]}</span>` : '';
     const notYet = [...d.needs, ...d.partial];
-    const list = (title, people, fmt = (m) => personRow(server, m, emojis)) => people.length
+    const list = (title, people, fmt) => people.length
       ? `<div class="grp"><div class="gt">${title} <span>${people.length}</span></div>${people.map(fmt).join('')}</div>` : '';
-    return `<div class="panel" id="p-${ids[i]}"><div class="dh"><b>${esc(d.name)}</b>${level}<span class="ct"><b>${d.done.length}</b>/${total}</span></div>
+    return `<div class="panel${d === first ? ' def' : ''}" id="${pid(d)}"><div class="dh"><b>${esc(d.name)}</b>${level}<span class="ct"><b>${d.done.length}</b>/${total}</span></div>
 <div class="pb"><span style="width:${pct}%"></span></div>
 <div class="cols">${list('Not yet', notYet, (m) => personRow(server, m, emojis, d.partial.includes(m) ? '<span class="px">partway</span>' : '')) || '<div class="grp"><div class="gt">Not yet <span>0</span></div><div class="none">Everyone\'s done it</div></div>'}
 ${list('Done', d.done, (m) => personRow(server, m, emojis, m.clears > 1 ? `<span class="px">×${m.clears}</span>` : ''))}</div></div>`;
   }).join('');
-  const show = ids.map((id) => `#${id}:checked~.pills label[for="${id}"]{background:var(--accent);color:#14110a}#${id}:checked~.panels #p-${id}{display:block}`).join('');
-  return `<div class="card dgs" id="dungeons"><h2>Dungeons</h2><style>${show}</style>${radios}<div class="pills">${pills}</div><div class="panels">${panels}</div></div>`;
+  const tile = (d) => {
+    const n = d.done.length;
+    const state = n === 0 ? ' none' : n >= total ? ' all' : '';
+    return `<a class="tile${state}${d === first ? ' def' : ''}" href="#${pid(d)}"><span class="tn">${esc(d.short)}</span><span class="tf"><span class="tb"><i style="width:${total ? Math.round((n / total) * 100) : 0}%"></i></span><span class="tc">${n}/${total}</span></span></a>`;
+  };
+  const top = Math.max(0, ...members.map((m) => m.level));
+  const groups = BANDS.map(([lo, hi]) => ({ label: `Level ${lo === 10 ? '13' : lo}–${hi}`, lo, items: board.filter((d) => d.minLevel != null && d.minLevel >= lo && d.minLevel <= hi) }));
+  const other = board.filter((d) => d.minLevel == null);
+  if (other.length) groups.push({ label: 'Other', lo: 0, items: other });
+  const grid = groups.filter((g) => g.items.length).map((g) => `<details class="band"${top >= g.lo ? ' open' : ''}><summary>${g.label}<span>${g.items.length}</span></summary><div class="tiles">${g.items.map(tile).join('')}</div></details>`).join('');
+  const sel = [...board.map((d) => `.dgs:has(#${pid(d)}:target) a[href="#${pid(d)}"]`), '.dgs:not(:has(.panel:target)) .tile.def'];
+  const style = `${sel.join(',')}{background:var(--accent);border-color:var(--accent)}${sel.map((x) => `${x} *`).join(',')}{color:#14110a}${sel.map((x) => `${x} .tb i`).join(',')}{background:#14110a}${sel.map((x) => `${x} .tb`).join(',')}{background:#14110a33}`;
+  return `<div class="card dgs" id="dungeons"><h2>Dungeons</h2><style>${style}</style><div class="panels">${panels}</div><div class="pick">${grid}</div></div>`;
 }
 
 function shortTime(ts, timezone) {
