@@ -8,7 +8,7 @@ export function sortByLevel(members) {
 export const leveling = {
   id: 'leveling',
   label: 'Leveling list (class, level, name, levels gained today)',
-  build({ members, baseline, config, emojis }) {
+  build({ members, baseline, config, emojis, link }) {
     const { top } = config.leveling;
     const sorted = sortByLevel(members);
     const width = String(sorted[0]?.level ?? 0).length;
@@ -17,7 +17,10 @@ export const leveling = {
       const level = String(m.level).padStart(width, ' ');
       return `${classIcon(m.classId, emojis)} \`${level}\` **${m.name}**${gained > 0 ? ` +${gained}` : ''}`;
     });
-    if (sorted.length > top) lines.push(`-# and ${sorted.length - top} more`);
+    if (sorted.length > top) {
+      const more = `and ${sorted.length - top} more`;
+      lines.push(`-# ${link ? `[${more}](${link})` : more}`);
+    }
     return { lines, gap: true };
   },
 };

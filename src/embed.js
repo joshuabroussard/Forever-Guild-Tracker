@@ -3,13 +3,14 @@ import { SECTIONS } from './sections/index.js';
 const MAX_DESCRIPTION = 4096;
 
 // Builds the Discord embed. Sections return lines that go into the
-// description; a section with `gap` gets a blank line before it.
-export function buildEmbed({ members, baseline, config, guildName, emojis = {}, now = new Date(), error = null }) {
+// description; a section with `gap` gets a blank line before it. With a
+// `link`, the title opens the guild's page on the website.
+export function buildEmbed({ members, baseline, config, guildName, emojis = {}, now = new Date(), error = null, link = null }) {
   const blocks = [];
   for (const id of config.sections) {
     const section = SECTIONS[id];
     if (!section) continue;
-    const out = section.build({ members, baseline, config, emojis });
+    const out = section.build({ members, baseline, config, emojis, link });
     if (out.lines?.length) blocks.push({ lines: out.lines, gap: out.gap });
   }
 
@@ -32,6 +33,7 @@ export function buildEmbed({ members, baseline, config, guildName, emojis = {}, 
     color: parseInt(String(config.color).replace('#', ''), 16) || 0x3b82f6,
     timestamp: now.toISOString(),
   };
+  if (link) embed.url = link;
   if (error) embed.footer = { text: `Last update failed: ${error}. Showing the last good data.` };
   return embed;
 }

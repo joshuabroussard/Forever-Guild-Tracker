@@ -10,6 +10,11 @@ channel up to date with the guild's leveling progress.
   embed: one ranked line per character with its class icon, level and levels
   gained today. The bot uploads the class icons as its own emoji on first start.
   `/guild refresh` updates it now; `/guild settings` links the settings page.
+- Public guild page: the embed's title (and its "and N more" line) opens
+  `https://wow.chille.sh/g/{region}/{guild-slug}`, with the guild's stats,
+  who leveled today, a class breakdown and the full ranked roster. Each name
+  opens an armory-style character page (race, class, item level, last online,
+  equipment). Turn it off per server on the settings page.
 - One Node process runs both, on `127.0.0.1:3000`, with nginx in front.
 
 ## Where the data comes from
@@ -24,7 +29,11 @@ Things to know:
   "Check guild" can't find yours, set the slug by hand on the settings page.
 - Blizzard updates a character when they log out, so changes show up after that.
 
-Leveling only needs the roster, which is one API call per guild per refresh.
+The roster lags behind real levels, so the roster only decides who is in the
+guild and each level comes from that character's profile
+(`/profile/wow/character/{name}-{surname}`), four lookups at a time. Character
+pages also read `/equipment` and `/character-media`, cached for 10 minutes, and
+only for characters on a tracked roster.
 
 ## Adding more to the embed later
 
@@ -131,6 +140,8 @@ or saved GitHub credentials).
   The site checks this live through the bot on every page and save.
 - Forms carry a per-session token and must come from the site itself.
 - Sessions live in memory and last 24 hours; restarting signs everyone out.
+- The guild and character pages are public (like Blizzard's armory) and
+  marked noindex. They show only roster and armory data, never Discord details.
 - Secrets live only in `.env`. Settings and tracking data live in
   `data/servers.json`.
 

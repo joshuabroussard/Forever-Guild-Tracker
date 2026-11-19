@@ -21,13 +21,25 @@ label{display:block;font-weight:500;margin:14px 0 4px}input[type=text],select,in
 .note{padding:10px 14px;border-radius:8px;margin-bottom:16px;border:1px solid var(--line)}.note.ok{border-color:var(--ok)}.note.bad{border-color:var(--bad)}
 .embed{background:var(--embed);border-left:4px solid var(--accent);border-radius:4px;padding:12px 16px;font-size:14px}.embed .f{margin-top:10px}.embed .fn{font-weight:600}
 code{font-size:13px}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:20px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:12px}.stat b{display:block;font-size:24px;line-height:1.2}
+.chips{display:flex;flex-wrap:wrap;gap:8px}.chip{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border:1px solid var(--line);border-radius:999px;font-size:14px}
+.ci{width:20px;height:20px;border-radius:4px;vertical-align:-5px;display:inline-block;box-shadow:inset 0 0 0 1px rgba(127,127,127,.35)}
+table.rank{width:100%;border-collapse:collapse;font-size:15px}table.rank td{padding:8px 6px;border-top:1px solid var(--line);vertical-align:middle}
+table.rank td.n{color:var(--muted);width:2.5em;text-align:right}table.rank td.lv{font-variant-numeric:tabular-nums;text-align:right;width:3em;font-weight:600}
+table.rank a{color:var(--text);text-decoration:none;font-weight:500}table.rank a:hover{text-decoration:underline}
+.bar{height:6px;border-radius:3px;background:var(--line);overflow:hidden;min-width:60px}.bar span{display:block;height:100%;box-shadow:inset 0 0 0 1px rgba(127,127,127,.35);border-radius:3px}
+.gain{color:var(--ok);font-weight:600;white-space:nowrap}
+.hero{display:flex;gap:16px;align-items:center}.hero img{width:96px;height:96px;border-radius:12px;object-fit:cover;background:var(--line)}
+.items{width:100%;border-collapse:collapse;font-size:14px}.items td{padding:6px 4px;border-top:1px solid var(--line)}.items td.s{color:var(--muted);width:7em}.items td.il{text-align:right;color:var(--muted);font-variant-numeric:tabular-nums}
+.q-POOR{color:#9d9d9d}.q-COMMON{color:var(--text)}.q-UNCOMMON{color:#1eaa00}.q-RARE{color:#0070dd}.q-EPIC{color:#a335ee}.q-LEGENDARY{color:#ff8000}.q-ARTIFACT{color:#c9a74c}.q-HEIRLOOM{color:#00a8d6}
+@media (max-width:520px){.wide{display:none}}
 `;
 
-function page(title, body, user, csrf) {
+export function page(title, body, user, csrf) {
   const nav = user
     ? `<form method="post" action="/logout" style="margin:0"><input type="hidden" name="csrf" value="${esc(csrf)}"><span class="muted">${esc(user.username)}</span> <button class="btn">Sign out</button></form>`
     : '';
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)}</title><style>${CSS}</style></head><body><main><header><h1><a href="/" style="color:inherit;text-decoration:none">Guild tracker</a></h1>${nav}</header>${body}</main></body></html>`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>${esc(title)}</title><style>${CSS}</style></head><body><main><header><h1><a href="/" style="color:inherit;text-decoration:none">Guild tracker</a></h1>${nav}</header>${body}</main></body></html>`;
 }
 
 function serverIcon(s) {
@@ -66,6 +78,7 @@ function mdLite(s) {
       let html = esc(sub ? line.slice(3) : line)
         .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')
         .replace(/`(.+?)`/g, '<code>$1</code>')
+        .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2">$1</a>')
         .replace(/&lt;:(\w+):(\d+)&gt;/g, '<img src="https://cdn.discordapp.com/emojis/$2.png?size=32" alt="$1" width="18" height="18" style="vertical-align:-4px">');
       if (sub) html = `<span class="muted" style="font-size:12px">${html}</span>`;
       return html || '&nbsp;';
@@ -76,10 +89,11 @@ function mdLite(s) {
 export function embedPreview(embed) {
   if (!embed) return '';
   const footer = embed.footer?.text ? `<div class="muted" style="margin-top:10px;font-size:12px">${esc(embed.footer.text)}</div>` : '';
-  return `<div class="embed" style="border-left-color:#${embed.color.toString(16).padStart(6, '0')}"><div class="fn" style="font-size:16px;margin-bottom:4px">${esc(embed.title)}</div><div>${mdLite(embed.description)}</div>${footer}</div>`;
+  const title = embed.url ? `<a href="${esc(embed.url)}">${esc(embed.title)}</a>` : esc(embed.title);
+  return `<div class="embed" style="border-left-color:#${embed.color.toString(16).padStart(6, '0')}"><div class="fn" style="font-size:16px;margin-bottom:4px">${title}</div><div>${mdLite(embed.description)}</div>${footer}</div>`;
 }
 
-export function settingsPage({ user, csrf, server, settings, channels, notice, preview, messageUrl }) {
+export function settingsPage({ user, csrf, server, settings, channels, notice, preview, messageUrl, guildLink = null }) {
   const v = settings;
   const opt = (value, label, current) => `<option value="${esc(value)}"${value === current ? ' selected' : ''}>${esc(label)}</option>`;
   const sectionBoxes = Object.values(SECTIONS)
@@ -115,6 +129,7 @@ export function settingsPage({ user, csrf, server, settings, channels, notice, p
 <div><label for="color">Embed color</label><input type="color" id="color" name="color" value="${esc(v.color)}" style="width:100%;height:38px;border:1px solid var(--line);border-radius:8px;background:var(--bg)"></div>
 </div>
 <label class="check" style="margin-top:20px"><input type="checkbox" name="enabled"${v.enabled ? ' checked' : ''}> Keep the embed updated in Discord</label>
+<label class="check"><input type="checkbox" name="publicPage"${v.publicPage !== false ? ' checked' : ''}> Public guild page on this site, linked from the embed's title${guildLink ? ` (<a href="${esc(guildLink)}">open it</a>)` : ''}</label>
 <div class="actions"><button class="btn" name="action" value="check">Check guild</button><button class="btn primary" name="action" value="save">Save</button></div>
 </form>
 ${preview ? `<div class="card"><h2>Preview</h2>${embedPreview(preview)}</div>` : ''}`;

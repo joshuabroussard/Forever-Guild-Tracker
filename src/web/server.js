@@ -2,12 +2,16 @@ import { createServer } from 'node:http';
 import { randomBytes } from 'node:crypto';
 import { Sessions, parseCookies, cookie, safeEqual } from './session.js';
 import { landingPage, serverListPage, settingsPage, errorPage, esc } from './views.js';
-import { DEFAULT_SERVER, normalizeServerForm } from '../config.js';
+import { DEFAULT_SERVER, REGIONS, normalizeServerForm, effectiveSlug } from '../config.js';
 import { checkGuild } from '../tracker.js';
 import { buildEmbed } from '../embed.js';
+import { Armory } from '../armory.js';
+import { characterPath } from '../blizzard.js';
+import { guildUrl, charSlug } from '../links.js';
+import { guildPage, characterPage, rankMembers } from './guild-pages.js';
 
 const SECURITY_HEADERS = {
-  'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; img-src https://cdn.discordapp.com; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
+  'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; img-src https://cdn.discordapp.com https://render.worldofwarcraft.com; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
   'X-Content-Type-Options': 'nosniff',
   'Referrer-Policy': 'same-origin',
   'X-Frame-Options': 'DENY',
@@ -15,7 +19,7 @@ const SECURITY_HEADERS = {
 const GUILD_LIST_TTL = 30_000;
 
 // bot: { botPresent(id), postableChannels(id), canManage(id, userId), publish(id), botPermissions }
-export function createWebServer({ env, store, bot, pool, oauth, secureCookies = true }) {
+export function createWebServer({ env, store, bot, pool, oauth, secureCookies = true, armory = new Armory(pool) }) {
   const sessions = new Sessions(env.sessionSecret);
   const origin = new URL(env.publicUrl).origin;
 
@@ -72,7 +76,40 @@ export function createWebServer({ env, store, bot, pool, oauth, secureCookies = 
       config: { ...settings, refreshMinutes: env.refreshMinutes },
       guildName: settings.wowGuildDisplayName || settings.guildName,
       emojis: bot.classEmojis ? bot.classEmojis() : {},
+      link: guildUrl(env.publicUrl, settings),
     });
+  }
+
+  // The tracked server whose public page answers /g/{region}/{slug}. If more
+  // than one Discord server tracks the same guild, the freshest data wins.
+  function publicGuild(region, slug) {
+    return store.all()
+      .filter((s) => s.region === region && s.publicPage !== false && s.lastMembers?.length && effectiveSlug(s) === slug)
+      .sort((a, b) => String(b.lastRefreshAt || '').localeCompare(String(a.lastRefreshAt || '')))[0] || null;
+  }
+
+  async function publicPage(req, res, url, session) {
+    const parts = url.pathname.split('/').filter(Boolean).slice(1);
+    let region, slug, who;
+    try {
+      [region, slug, who] = parts.map((p) => decodeURIComponent(p).toLowerCase());
+    } catch {
+      region = null;
+    }
+    const user = session?.user;
+    const csrf = session?.csrf;
+    const server = REGIONS.includes(region) && slug && parts.length <= 3 ? publicGuild(region, slug) : null;
+    if (!server) return send(res, 404, errorPage(404, 'No public page for that guild here.', user, csrf));
+    const emojis = bot.classEmojis ? bot.classEmojis() : {};
+    const members = server.lastMembers;
+    const cache = { 'Cache-Control': 'public, max-age=60' };
+    if (!who) return send(res, 200, guildPage({ server, members, emojis, user, csrf }), cache);
+    const member = members.find((m) => charSlug(m.name) === who);
+    if (!member) return send(res, 404, errorPage(404, 'That character isn\'t in this guild.', user, csrf));
+    const path = member.profilePath || characterPath({}, member.name);
+    const details = await armory.character(server.region, server.locale, path).catch((e) => ({ error: e.message }));
+    const ranked = rankMembers(members, server.baseline);
+    return send(res, 200, characterPage({ server, member, ranked, armory: details, emojis, user, csrf }), cache);
   }
 
   function messageUrl(serverId, s) {
@@ -116,6 +153,8 @@ export function createWebServer({ env, store, bot, pool, oauth, secureCookies = 
         'Set-Cookie': [clear, cookie('sid', sid, { maxAge: 86400, secure: secureCookies })],
       });
     }
+
+    if (req.method === 'GET' && path.startsWith('/g/')) return publicPage(req, res, url, session);
 
     if (!session) {
       if (req.method === 'GET' && path === '/') return send(res, 200, landingPage());
@@ -165,7 +204,8 @@ export function createWebServer({ env, store, bot, pool, oauth, secureCookies = 
         const notice = url.searchParams.get('saved')
           ? { ok: true, text: settings.enabled ? 'Saved. The embed will update in Discord in a moment.' : 'Saved. Tracking is off, so nothing is posted.' }
           : null;
-        return send(res, 200, settingsPage({ user, csrf, server, settings, channels, notice, preview: previewFor(settings), messageUrl: messageUrl(serverId, settings) }));
+        const guildLink = settings.lastMembers?.length ? guildUrl(env.publicUrl, settings) : null;
+        return send(res, 200, settingsPage({ user, csrf, server, settings, channels, notice, preview: previewFor(settings), messageUrl: messageUrl(serverId, settings), guildLink }));
       }
 
       if (req.method === 'POST') {

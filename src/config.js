@@ -41,6 +41,7 @@ export const DEFAULT_SERVER = {
   color: '#3b82f6',
   sections: ['summary', 'leveling'],
   leveling: { maxLevel: 60, top: 25 },
+  publicPage: true,
 };
 
 // Blizzard hasn't documented how Forever guild slugs are built. This guess
@@ -93,6 +94,7 @@ export function normalizeServerForm(form, channels = []) {
     errors,
     value: {
       enabled: form.enabled === 'on' || form.enabled === true,
+      publicPage: form.publicPage === 'on' || form.publicPage === true,
       guildName, guildSlug, region, timezone, channelId, color, sections, leveling,
       locale: DEFAULT_SERVER.locale,
     },

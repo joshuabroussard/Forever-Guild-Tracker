@@ -68,7 +68,7 @@ export function createBot({ env, store, pool }) {
     if (!server?.enabled || !server.channelId) return { ok: false, reason: 'Tracking is off or no channel is set.' };
     busy.add(serverId);
     try {
-      const { embed, patch, error } = await refreshServer(pool, server, { refreshMinutes: env.refreshMinutes, emojis: classEmojis });
+      const { embed, patch, error } = await refreshServer(pool, server, { refreshMinutes: env.refreshMinutes, emojis: classEmojis, publicUrl: env.publicUrl });
       store.patch(serverId, patch);
       const channel = await client.channels.fetch(server.channelId).catch(() => null);
       if (!channel?.isTextBased()) {

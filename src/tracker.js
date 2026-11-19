@@ -2,6 +2,7 @@ import { BlizzardClient, parseRoster } from './blizzard.js';
 import { updateBaseline } from './state.js';
 import { buildEmbed } from './embed.js';
 import { effectiveSlug } from './config.js';
+import { guildUrl } from './links.js';
 
 // One Blizzard client per region, shared by every server.
 export class BlizzardPool {
@@ -45,11 +46,11 @@ export async function withProfileLevels(client, members, { concurrency = 4 } = {
   async function worker() {
     while (next < members.length) {
       const i = next++;
-      const { profilePath, ...m } = members[i];
+      const m = members[i];
       let level = m.level;
-      if (profilePath) {
+      if (m.profilePath) {
         try {
-          const profileLevel = Number((await client.getCharacter(profilePath)).level);
+          const profileLevel = Number((await client.getCharacter(m.profilePath)).level);
           if (Number.isFinite(profileLevel) && profileLevel > level) level = profileLevel;
         } catch { /* keep the roster level */ }
       }
@@ -63,7 +64,7 @@ export async function withProfileLevels(client, members, { concurrency = 4 } = {
 // Pulls the roster for one server's WoW guild and builds its embed.
 // Returns the embed and the tracking fields to save. On failure it keeps the
 // last good data and puts the reason in the footer.
-export async function refreshServer(pool, server, { refreshMinutes, emojis = {}, now = new Date() }) {
+export async function refreshServer(pool, server, { refreshMinutes, emojis = {}, now = new Date(), publicUrl = null }) {
   const slug = effectiveSlug(server);
   const client = pool.for(server.region, server.locale);
   let members = server.lastMembers || [];
@@ -86,6 +87,7 @@ export async function refreshServer(pool, server, { refreshMinutes, emojis = {},
     emojis,
     now,
     error,
+    link: guildUrl(publicUrl, server),
   });
   return {
     embed,

@@ -134,7 +134,7 @@ test('levels come from character profiles when the roster lags', async () => {
   const first = await refreshServer(pool, s, { refreshMinutes: 15, now: new Date('2026-11-17T14:00:00Z') });
   const byName = Object.fromEntries(first.patch.lastMembers.map((m) => [m.name, m.level]));
   assert.deepEqual(byName, { Thrall: 33, Mira: 20, Tiny: 4 }); // profile ahead, profile behind, no profile
-  assert.ok(first.patch.lastMembers.every((m) => !('profilePath' in m)));
+  assert.equal(first.patch.lastMembers.find((m) => m.name === 'Mira').profilePath, '/profile/wow/character/mira-dawn'); // kept for the website
   assert.ok(fetch.calls.some((u) => u.includes('/profile/wow/character/mira-dawn?namespace=profile-forever-us')));
 
   s = { ...s, ...first.patch };
@@ -160,4 +160,41 @@ test('profile lookups run a few at a time and survive API errors', async () => {
   assert.ok(peak <= 4);
   assert.equal(out.find((m) => m.name === 'C3').level, 13);
   assert.equal(out.find((m) => m.name === 'C0').level, 50);
+});
+
+test('embed title and the and-more line link to the guild page', async () => {
+  const body = roster(Object.fromEntries(Array.from({ length: 8 }, (_, i) => [`C${i}`, 20 + i])));
+  const pool = new BlizzardPool({ clientId: 'x', clientSecret: 'y', fetchImpl: blizzardFetch(() => body) });
+  const s = { ...server, leveling: { maxLevel: 60, top: 5 } };
+  const { embed } = await refreshServer(pool, s, { refreshMinutes: 15, publicUrl: 'https://wow.chille.sh' });
+  assert.equal(embed.url, 'https://wow.chille.sh/g/us/ashen-oaths-watch');
+  assert.match(embed.description, /\n-# \[and 3 more\]\(https:\/\/wow\.chille\.sh\/g\/us\/ashen-oaths-watch\)$/);
+
+  const off = await refreshServer(pool, { ...s, publicPage: false }, { refreshMinutes: 15, publicUrl: 'https://wow.chille.sh' });
+  assert.equal(off.embed.url, undefined);
+  assert.match(off.embed.description, /\n-# and 3 more$/);
+});
+
+test('armory details are parsed and cached', async () => {
+  const { Armory, parseCharacter } = await import('../src/armory.js');
+  let calls = 0;
+  const pool = { for: () => ({ async get(path) {
+    calls++;
+    if (path.endsWith('/equipment')) return { equipped_items: [{ slot: { name: 'Head' }, name: 'Cap of Tests', quality: { type: 'RARE' }, level: { value: 33 } }] };
+    if (path.endsWith('/character-media')) return { assets: [{ key: 'inset', value: 'https://render.worldofwarcraft.com/us/x.jpg' }] };
+    return { name: 'Thrall', level: 42, race: { name: 'Orc' }, character_class: { name: 'Shaman' }, equipped_item_level: 31 };
+  } }) };
+  let t = 0;
+  const armory = new Armory(pool, { now: () => t });
+  const a = await armory.character('us', 'en_US', '/profile/wow/character/thrall');
+  assert.equal(a.found, true);
+  assert.equal(a.level, 42);
+  assert.equal(a.items[0].quality, 'RARE');
+  assert.equal(a.image, 'https://render.worldofwarcraft.com/us/x.jpg');
+  await armory.character('us', 'en_US', '/profile/wow/character/thrall');
+  assert.equal(calls, 3);
+  t = 11 * 60_000;
+  await armory.character('us', 'en_US', '/profile/wow/character/thrall');
+  assert.equal(calls, 6);
+  assert.equal(parseCharacter({}, null, { assets: [{ key: 'inset', value: 'https://evil.example/x.jpg' }] }).image, null);
 });

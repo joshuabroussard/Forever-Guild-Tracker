@@ -143,6 +143,41 @@ test('check guild looks it up without saving', async () => {
   assert.equal(store.get(SERVER).guildName, "Ashen Oath's Watch");
 });
 
+test('guild and character pages are public, ranked, and escaped', async () => {
+  store.patch(SERVER, {
+    publicPage: true,
+    wowGuildDisplayName: 'Ashen <b>Oath</b>',
+    lastRefreshAt: '2026-11-18T20:00:00Z',
+    baseline: { date: '2026-11-18', levels: { 1: 55, 2: 22, 3: 22 } },
+    lastMembers: [
+      { id: 1, name: 'Thrall Stormborn', level: 60, classId: 7, className: 'Shaman', profilePath: '/profile/wow/character/thrall-stormborn' },
+      { id: 2, name: 'Mira', level: 22, classId: 5, className: 'Priest' },
+      { id: 3, name: 'Bo', level: 22, classId: 1, className: 'Warrior' },
+    ],
+  });
+  const res = await get('/g/us/ashen-oaths-watch');
+  assert.equal(res.status, 200);
+  assert.match(res.headers.get('content-security-policy'), /render\.worldofwarcraft\.com/);
+  const html = await res.text();
+  assert.match(html, /Ashen &lt;b&gt;Oath&lt;\/b&gt;/);
+  assert.match(html, /👑 .*Thrall Stormborn <span class="gain">\+5<\/span>/);
+  assert.match(html, /<td class="n">2<\/td>.*Bo.*<td class="n">2<\/td>.*Mira/s); // tied levels share a place
+  assert.match(html, /href="\/g\/us\/ashen-oaths-watch\/thrall-stormborn"/);
+
+  const char = await get('/g/us/ashen-oaths-watch/thrall-stormborn');
+  assert.equal(char.status, 200);
+  const ch = await char.text();
+  assert.match(ch, /#1 of 3 by level/);
+  assert.match(ch, /\+5 levels/);
+
+  assert.equal((await get('/g/us/ashen-oaths-watch/nobody')).status, 404);
+  assert.equal((await get('/g/us/some-other-guild')).status, 404);
+  assert.equal((await get('/g/us/%E0%A4%A')).status, 404);
+  store.patch(SERVER, { publicPage: false });
+  assert.equal((await get('/g/us/ashen-oaths-watch')).status, 404);
+  store.patch(SERVER, { publicPage: true });
+});
+
 test('sign out ends the session', async () => {
   const sid = await signIn();
   const page = await (await get('/', sid)).text();
