@@ -65,11 +65,11 @@ export class BlizzardClient {
     return this.get(`${profilePath}/encounters/dungeons`, 'profile');
   }
 
-  // URL of a class's icon. Forever's media routes aren't confirmed, so this
-  // falls back to Classic Era and then retail, which use the same icons.
-  async getClassIconUrl(classId) {
+  // URL of a class's or item's icon. Forever's media routes aren't confirmed,
+  // so this falls back to Classic Era and then retail, which share icons.
+  async getMediaIcon(kind, id) {
     for (const ns of [`static-forever-${this.region}`, `static-classic1x-${this.region}`, `static-${this.region}`]) {
-      const url = `${this.host}/data/wow/media/playable-class/${classId}?namespace=${ns}`;
+      const url = `${this.host}/data/wow/media/${kind}/${encodeURIComponent(id)}?namespace=${ns}`;
       const res = await this.fetch(url, { headers: { Authorization: `Bearer ${await this.getToken()}` } });
       if (!res.ok) continue;
       const body = await res.json();
@@ -77,6 +77,14 @@ export class BlizzardClient {
       if (icon) return icon;
     }
     return null;
+  }
+
+  getClassIconUrl(classId) {
+    return this.getMediaIcon('playable-class', classId);
+  }
+
+  getItemIconUrl(itemId) {
+    return this.getMediaIcon('item', itemId);
   }
 
   async getClassNames() {

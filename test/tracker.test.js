@@ -178,9 +178,14 @@ test('embed title and the and-more line link to the guild page', async () => {
 test('armory details are parsed and cached', async () => {
   const { Armory, parseCharacter } = await import('../src/armory.js');
   let calls = 0;
-  const pool = { for: () => ({ async get(path) {
+  let iconCalls = 0;
+  const pool = { for: () => ({ async getItemIconUrl(id) { iconCalls++; return `https://render.worldofwarcraft.com/icons/56/${id}.jpg`; }, async get(path) {
     calls++;
-    if (path.endsWith('/equipment')) return { equipped_items: [{ slot: { name: 'Head' }, name: 'Cap of Tests', quality: { type: 'RARE' }, level: { value: 33 } }] };
+    if (path.endsWith('/statistics')) return { health: 1200, power: 900, power_type: { name: 'Mana' }, strength: { base: 40, effective: 52 }, melee_crit: { value: 5.234 }, dodge: { value: 0 } };
+    if (path.endsWith('/equipment')) return { equipped_items: [{ item: { id: 77 }, slot: { name: 'Head', type: 'HEAD' }, name: 'Cap of Tests', quality: { type: 'RARE' }, level: { value: 33 },
+      binding: { name: 'Binds when picked up' }, armor: { display: { display_string: '120 Armor' } },
+      stats: [{ type: { name: 'Stamina' }, value: 8, display: { display_string: '+8 Stamina', color: { r: 255, g: 255, b: 255, a: 1 } } }],
+      spells: [{ description: 'Equip: Improves your chance to hit by 1%.' }] }] };
     if (path.endsWith('/character-media')) return { assets: [{ key: 'inset', value: 'https://render.worldofwarcraft.com/us/x.jpg' }] };
     return { name: 'Thrall', level: 42, race: { name: 'Orc' }, character_class: { name: 'Shaman' }, equipped_item_level: 31 };
   } }) };
@@ -190,12 +195,20 @@ test('armory details are parsed and cached', async () => {
   assert.equal(a.found, true);
   assert.equal(a.level, 42);
   assert.equal(a.items[0].quality, 'RARE');
+  assert.equal(a.items[0].icon, 'https://render.worldofwarcraft.com/icons/56/77.jpg');
+  assert.equal(a.items[0].armor, '120 Armor');
+  assert.equal(a.items[0].stats[0].color, 'rgb(255,255,255)');
+  assert.deepEqual(a.items[0].spells, ['Equip: Improves your chance to hit by 1%.']);
+  assert.deepEqual(a.stats.map((g) => g.title), ['General', 'Attributes', 'Melee']);
+  assert.deepEqual(a.stats[0].rows, [['Health', '1,200'], ['Mana', '900']]);
+  assert.deepEqual(a.stats[2].rows, [['Crit chance', '5.23%']]);
   assert.equal(a.image, 'https://render.worldofwarcraft.com/us/x.jpg');
   await armory.character('us', 'en_US', '/profile/wow/character/thrall');
-  assert.equal(calls, 3);
+  assert.equal(calls, 4);
   t = 11 * 60_000;
   await armory.character('us', 'en_US', '/profile/wow/character/thrall');
-  assert.equal(calls, 6);
+  assert.equal(calls, 8);
+  assert.equal(iconCalls, 1); // icons are kept for a day
   assert.equal(parseCharacter({}, null, { assets: [{ key: 'inset', value: 'https://evil.example/x.jpg' }] }).image, null);
 });
 

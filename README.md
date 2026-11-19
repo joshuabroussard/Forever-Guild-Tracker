@@ -13,8 +13,9 @@ channel up to date with the guild's leveling progress.
 - Public guild page: the embed's title (and its "and N more" line) opens
   `https://wow.chille.sh/g/{region}/{guild-slug}`, with the guild's stats,
   who leveled today, a class breakdown and the full ranked roster. Each name
-  opens an armory-style character page (race, class, item level, last online,
-  equipment). Turn it off per server on the settings page.
+  opens an armory-style character page: the character's render with gear
+  down both sides like the official armory, item icons, quality colors, a
+  full tooltip per item (hover or tap), and the character sheet stats. Turn it off per server on the settings page.
 - Dungeon first clears: the guild page lists, per dungeon, who still needs a
   first clear (and who got partway), skipping characters below its entry
   level. Each character page shows their cleared and still-to-do dungeons.
@@ -37,8 +38,14 @@ Things to know:
 The roster lags behind real levels, so the roster only decides who is in the
 guild and each level comes from that character's profile
 (`/profile/wow/character/{name}-{surname}`), four lookups at a time. Character
-pages also read `/equipment` and `/character-media`, cached for 10 minutes, and
-only for characters on a tracked roster.
+pages also read `/equipment`, `/character-media` and `/statistics`, cached for
+10 minutes, and only for characters on a tracked roster. Item icons come from
+`/data/wow/media/item/{id}` (Forever, then Classic Era, then retail) and are
+kept for a day.
+
+If dungeons come up empty, the log says why (`journalctl -u guild-tracker`),
+and `npm run probe -- --guild "Guild Name" --raw` prints Blizzard's full
+dungeon answer for the guild's top character.
 
 ## Adding more to the embed later
 

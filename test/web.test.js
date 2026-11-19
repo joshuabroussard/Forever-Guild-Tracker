@@ -177,8 +177,8 @@ test('guild and character pages are public, ranked, and escaped', async () => {
   const char = await get('/g/us/ashen-oaths-watch/thrall-stormborn');
   assert.equal(char.status, 200);
   const ch = await char.text();
-  assert.match(ch, /#1 of 3 by level/);
-  assert.match(ch, /\+5 levels/);
+  assert.match(ch, /Guild rank <b>#1<\/b> of 3/);
+  assert.match(ch, /Today <b>\+5<\/b>/);
   assert.match(ch, /✓ The Deadmines <span class="muted">×3/);
   assert.match(await (await get('/g/us/ashen-oaths-watch/bo')).text(), /Still needs a first clear.*The Deadmines/s);
 
@@ -203,4 +203,28 @@ test('Discord server list filter allows owners, admins and Manage Server only', 
   assert.equal(canManageFromList({ permissions: '8' }), true);
   assert.equal(canManageFromList({ permissions: '32' }), true);
   assert.equal(canManageFromList({ permissions: '1024' }), false);
+});
+
+test('character page lays gear out like the armory, with tooltips', async () => {
+  const { characterPage } = await import('../src/web/guild-pages.js');
+  const { parseItem } = await import('../src/armory.js');
+  const server = { ...serverSettings, wowGuildDisplayName: 'the girls' };
+  const member = { id: 1, name: 'Ivy', level: 36, classId: 11 };
+  const items = [
+    parseItem({ item: { id: 1 }, slot: { type: 'HEAD', name: 'Head' }, name: "Defender's Leather Hood", quality: { type: 'RARE' }, level: { value: 25 },
+      binding: { name: 'Binds when equipped' }, inventory_type: { name: 'Head' }, item_subclass: { name: 'Leather' },
+      armor: { display: { display_string: '98 Armor' } }, stats: [{ type: { name: 'Agility' }, value: 6, display: { display_string: '+6 Agility' } }],
+      spells: [{ description: 'Equip: <script>alert(1)</script>' }] }),
+    parseItem({ item: { id: 2 }, slot: { type: 'MAIN_HAND', name: 'Main Hand' }, name: 'Ceremonial Mallet', quality: { type: 'RARE' }, level: { value: 42 },
+      weapon: { damage: { display_string: '60 - 91 Damage' }, attack_speed: { display_string: 'Speed 3.50' }, dps: { display_string: '(21.6 damage per second)' } } }),
+  ];
+  items[0].icon = 'https://render.worldofwarcraft.com/icons/56/inv_helmet.jpg';
+  const html = characterPage({ server, member, ranked: [{ ...member, place: 1, gained: 0 }], armory: { found: true, level: 36, race: 'Night Elf', className: 'Druid', items, stats: [], render: 'https://render.worldofwarcraft.com/forever-us/x-main-raw.png' } });
+  assert.match(html, /Level 36 Night Elf Druid/);
+  assert.match(html, /class="slot qRARE" tabindex="0"[^>]*><span class="ic" style="background-image:url\('https:\/\/render\.worldofwarcraft\.com\/icons\/56\/inv_helmet\.jpg'\)"/);
+  assert.match(html, /<div class="tip" role="tooltip"><div class="t">Defender&#39;s Leather Hood<\/div><div class="y">Item Level 25<\/div><div>Binds when equipped<\/div>/);
+  assert.match(html, /60 - 91 Damage<\/span><span>Speed 3\.50/);
+  assert.match(html, /class="slot empty"><span class="ic"><\/span><span class="nm"><span>Neck/);
+  assert.match(html, /x-main-raw\.png/);
+  assert.doesNotMatch(html, /<script>alert/);
 });

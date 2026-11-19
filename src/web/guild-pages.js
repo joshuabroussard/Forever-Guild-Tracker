@@ -141,6 +141,78 @@ ${line('Cleared', list(done, (d) => `<span class="chip">✓ ${esc(d.name)}${d.do
 ${!todo.length && !partway.length && !done.length ? `<p class="muted">${esc(noDungeonsText(server.dungeonStatus?.[member.id], member.name))}</p>` : ''}</div>`;
 }
 
+// Paper-doll layout like the official armory: gear down both sides of the
+// character, weapons underneath, a tooltip on each slot (hover or tap).
+const LEFT = ['HEAD', 'NECK', 'SHOULDER', 'BACK', 'CHEST', 'SHIRT', 'TABARD', 'WRIST'];
+const RIGHT = ['HANDS', 'WAIST', 'LEGS', 'FEET', 'FINGER_1', 'FINGER_2', 'TRINKET_1', 'TRINKET_2'];
+const WEAPONS = ['MAIN_HAND', 'OFF_HAND', 'RANGED'];
+const SLOT_NAMES = {
+  HEAD: 'Head', NECK: 'Neck', SHOULDER: 'Shoulders', BACK: 'Back', CHEST: 'Chest', SHIRT: 'Shirt', TABARD: 'Tabard', WRIST: 'Wrist',
+  HANDS: 'Hands', WAIST: 'Waist', LEGS: 'Legs', FEET: 'Feet', FINGER_1: 'Ring', FINGER_2: 'Ring', TRINKET_1: 'Trinket', TRINKET_2: 'Trinket',
+  MAIN_HAND: 'Main Hand', OFF_HAND: 'Off Hand', RANGED: 'Ranged',
+};
+
+const ARMORY_CSS = `
+main{max-width:1000px}
+.armory{--c:#888;background:radial-gradient(ellipse at 50% 20%,color-mix(in srgb,var(--c) 35%,#0d0f14) 0%,#0d0f14 70%);color:#f2f3f5;border-radius:14px;padding:20px;margin-bottom:16px;border:1px solid #2a2d35}
+.armory .muted{color:#a9aebb}.armory a{color:#e6c35c}
+.ahead h2{font-size:28px;margin:0;color:var(--c)}.ahead .sub{font-size:16px;margin-top:2px}
+.badges{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}.badge{background:#ffffff14;border:1px solid #ffffff22;border-radius:999px;padding:3px 10px;font-size:13px}
+.badge b{color:#e6c35c}
+.doll{display:grid;grid-template-columns:1fr minmax(160px,300px) 1fr;gap:8px;margin-top:16px;align-items:start}
+.col{display:flex;flex-direction:column;gap:6px}.col.r .slot{flex-direction:row-reverse;text-align:right}.col.r .tip{left:auto;right:0}
+.fig{display:flex;align-items:flex-end;justify-content:center;min-height:360px}.fig img{max-width:100%;max-height:520px;object-fit:contain}
+.weap{display:flex;justify-content:center;gap:12px;margin-top:8px;flex-wrap:wrap}.weap .slot{width:240px}
+.slot{position:relative;display:flex;align-items:center;gap:8px;padding:4px;border-radius:8px;outline:none;cursor:default;min-width:0}
+.slot:hover,.slot:focus{background:#ffffff10}
+.slot .ic{width:44px;height:44px;flex-shrink:0;border-radius:6px;border:2px solid var(--q);background:#1b1e25 center/cover no-repeat;box-shadow:0 0 6px color-mix(in srgb,var(--q) 40%,transparent)}
+.slot.empty .ic{border-color:#3a3d46;box-shadow:none;opacity:.6}
+.slot .nm{min-width:0;font-size:14px;line-height:1.25}.slot .nm b{display:block;color:var(--q);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.slot .nm span{font-size:12px;color:#a9aebb}
+.tip{display:none;position:absolute;z-index:20;top:100%;left:0;margin-top:4px;width:300px;max-width:86vw;background:#070a10f2;border:1px solid #6b6f7a;border-radius:6px;padding:10px 12px;font-size:13px;line-height:1.45;text-align:left;color:#fff;box-shadow:0 8px 24px #000a}
+.slot:hover .tip,.slot:focus .tip{display:block}
+.tip .t{font-size:15px;font-weight:600;color:var(--q)}.tip .y{color:#ffd100}.tip .g{color:#1eff00}.tip .d{color:#ffd100;font-style:italic}.tip .s{color:#9d9d9d}
+.tip .two{display:flex;justify-content:space-between;gap:12px}
+.qPOOR{--q:#9d9d9d}.qCOMMON{--q:#ffffff}.qUNCOMMON{--q:#1eff00}.qRARE{--q:#0070dd}.qEPIC{--q:#a335ee}.qLEGENDARY{--q:#ff8000}.qARTIFACT{--q:#e6cc80}.qHEIRLOOM{--q:#00ccff}
+.sheet{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-top:16px}
+.sheet .grp{background:#ffffff0a;border:1px solid #ffffff18;border-radius:8px;padding:8px 12px}.sheet h3{margin:0 0 4px;font-size:13px;color:#e6c35c;text-transform:uppercase;letter-spacing:.04em}
+.sheet .kv{display:flex;justify-content:space-between;font-size:14px;padding:2px 0}.sheet .kv span:last-child{font-variant-numeric:tabular-nums;font-weight:600}
+@media (max-width:700px){.doll{grid-template-columns:1fr 1fr}.fig{grid-column:1/3;order:-1;min-height:0}.fig img{max-height:300px}
+.col.r .slot{flex-direction:row;text-align:left}.col.r .tip{left:0;right:auto}.col.r .slot:nth-child(n) .tip{left:auto;right:0}
+.slot .ic{width:38px;height:38px}.weap .slot{width:auto;flex:1 1 140px}}
+`;
+
+function tooltip(i) {
+  const lines = [`<div class="t">${esc(i.name)}</div>`];
+  if (i.itemLevel) lines.push(`<div class="y">Item Level ${esc(i.itemLevel)}</div>`);
+  if (i.binding) lines.push(`<div>${esc(i.binding)}</div>`);
+  if (i.inventoryType || i.subclass) lines.push(`<div class="two"><span>${esc(i.inventoryType || '')}</span><span>${esc(i.subclass || '')}</span></div>`);
+  if (i.weapon?.damage || i.weapon?.speed) lines.push(`<div class="two"><span>${esc(i.weapon.damage || '')}</span><span>${esc(i.weapon.speed || '')}</span></div>`);
+  if (i.weapon?.dps) lines.push(`<div>${esc(i.weapon.dps)}</div>`);
+  if (i.armor) lines.push(`<div>${esc(i.armor)}</div>`);
+  for (const st of i.stats.filter((x) => !x.equip)) lines.push(`<div${st.color ? ` style="color:${st.color}"` : ''}>${esc(st.text)}</div>`);
+  for (const e of i.enchantments) lines.push(`<div class="g">${esc(e)}</div>`);
+  if (i.durability) lines.push(`<div>${esc(i.durability)}</div>`);
+  if (i.requirement) lines.push(`<div>${esc(i.requirement)}</div>`);
+  for (const st of i.stats.filter((x) => x.equip)) lines.push(`<div class="g">${esc(st.text)}</div>`);
+  for (const sp of i.spells) lines.push(`<div class="g">${esc(sp)}</div>`);
+  if (i.set?.name) {
+    lines.push(`<div class="y" style="margin-top:6px">${esc(i.set.name)}</div>`);
+    for (const e of i.set.effects) lines.push(`<div class="${e.active ? 'g' : 's'}">${esc(e.text)}</div>`);
+  }
+  if (i.description) lines.push(`<div class="d">"${esc(i.description)}"</div>`);
+  return `<div class="tip" role="tooltip">${lines.join('')}</div>`;
+}
+
+function slotHtml(type, item) {
+  if (!item) {
+    return `<div class="slot empty"><span class="ic"></span><span class="nm"><span>${esc(SLOT_NAMES[type] || type)}</span></span></div>`;
+  }
+  const icon = item.icon ? ` style="background-image:url('${esc(item.icon)}')"` : '';
+  return `<div class="slot q${esc(item.quality)}" tabindex="0" aria-label="${esc(item.name)}"><span class="ic"${icon}></span>
+<span class="nm"><b>${esc(item.name)}</b><span>${esc(SLOT_NAMES[type] || item.slot)}${item.itemLevel ? ` · ${esc(item.itemLevel)}` : ''}</span></span>${tooltip(item)}</div>`;
+}
+
 export function characterPage({ server, member, ranked, armory, emojis = {}, user, csrf, now = new Date() }) {
   const guildName = server.wowGuildDisplayName || server.guildName;
   const me = ranked.find((m) => m.id === member.id) || { place: '?', gained: 0 };
@@ -148,32 +220,47 @@ export function characterPage({ server, member, ranked, armory, emojis = {}, use
   const level = Math.max(member.level, a?.level || 0);
   const className = a?.className || member.className || CLASSES[member.classId]?.name || '';
   const subtitle = [`Level ${level}`, a?.race, className].filter(Boolean).join(' ');
-  const image = a?.image
-    ? `<img src="${esc(a.image)}" alt="">`
-    : `<div style="width:96px;height:96px;border-radius:12px;background:${hex(CLASSES[member.classId]?.color)};display:flex;align-items:center;justify-content:center">${classIconHtml(member.classId, emojis).replace('class="ci"', 'class="ci" style="width:48px;height:48px"')}</div>`;
+  const classColor = hex(CLASSES[member.classId]?.color);
 
-  const facts = [
-    ['Guild rank', `#${me.place} of ${ranked.length} by level`],
-    me.gained ? ['Today', `<span class="gain">+${me.gained} level${me.gained === 1 ? '' : 's'}</span>`] : null,
-    a?.itemLevel ? ['Item level', esc(a.itemLevel)] : null,
-    a?.faction ? ['Faction', esc(a.faction)] : null,
-    a?.lastLogin ? ['Last online', esc(lastSeen(a.lastLogin, server.timezone, now))] : null,
-  ].filter(Boolean);
-  const factsHtml = `<div class="stats" style="margin-top:16px">${facts.map(([k, v]) => `<div class="stat"><span class="muted">${esc(k)}</span><div style="font-weight:600">${v}</div></div>`).join('')}</div>`;
+  const badges = [
+    a?.itemLevel ? `<span class="badge">Item level <b>${esc(a.itemLevel)}</b></span>` : '',
+    `<span class="badge">Guild rank <b>#${esc(me.place)}</b> of ${ranked.length}</span>`,
+    me.gained ? `<span class="badge">Today <b>+${me.gained}</b></span>` : '',
+    a?.faction ? `<span class="badge">${esc(a.faction)}</span>` : '',
+    a?.lastLogin ? `<span class="badge">Online ${esc(lastSeen(a.lastLogin, server.timezone, now))}</span>` : '',
+  ].join('');
 
-  let gear = '';
+  let doll = '';
   if (a?.items?.length) {
-    gear = `<div class="card"><h2>Equipment</h2><table class="items">${a.items.map((i) => `<tr><td class="s">${esc(i.slot)}</td><td class="q-${esc(i.quality)}">${esc(i.name)}</td><td class="il">${i.itemLevel ? esc(i.itemLevel) : ''}</td></tr>`).join('')}</table></div>`;
+    const bySlot = Object.fromEntries(a.items.filter((i) => i.slotType).map((i) => [i.slotType, i]));
+    const placed = new Set([...LEFT, ...RIGHT, ...WEAPONS]);
+    const extra = a.items.filter((i) => !i.slotType || !placed.has(i.slotType));
+    const figure = a.render || a.image;
+    doll = `<div class="doll">
+<div class="col l">${LEFT.map((t) => slotHtml(t, bySlot[t])).join('')}</div>
+<div class="fig">${figure ? `<img src="${esc(figure)}" alt="${esc(member.name)}">` : ''}</div>
+<div class="col r">${RIGHT.map((t) => slotHtml(t, bySlot[t])).join('')}</div>
+</div>
+<div class="weap">${WEAPONS.filter((t) => bySlot[t] || t !== 'OFF_HAND').map((t) => slotHtml(t, bySlot[t])).join('')}${extra.map((i) => slotHtml(i.slotType, i)).join('')}</div>`;
   } else if (armory && !armory.found && !armory.error) {
-    gear = `<div class="card"><p class="muted" style="margin:0">Blizzard hasn't published the armory page for ${esc(member.name)} yet. That happens once they're level 10 and have logged out once.</p></div>`;
+    doll = `<p class="muted" style="margin-top:16px">Blizzard hasn't published the armory page for ${esc(member.name)} yet. That happens once they're level 10 and have logged out once.</p>`;
   } else if (armory?.error) {
-    gear = `<div class="card"><p class="muted" style="margin:0">Couldn't reach Blizzard's armory just now, so gear isn't shown. Try again in a few minutes.</p></div>`;
+    doll = `<p class="muted" style="margin-top:16px">Couldn't reach Blizzard's armory just now, so gear isn't shown. Try again in a few minutes.</p>`;
   }
 
-  const dungeonsHtml = characterDungeons(server, member);
-  const body = `<p style="margin:0 0 12px"><a href="${esc(guildPath(server))}">← ${esc(guildName)}</a></p>
-<div class="card"><div class="hero">${image}<div><h2 style="font-size:24px;margin:0">${esc(member.name)}</h2>
+  const sheet = a?.stats?.length
+    ? `<div class="sheet">${a.stats.map((g) => `<div class="grp"><h3>${esc(g.title)}</h3>${g.rows.map(([k, v]) => `<div class="kv"><span>${esc(k)}</span><span>${esc(v)}</span></div>`).join('')}</div>`).join('')}</div>`
+    : '';
+
+  const body = `<style>${ARMORY_CSS}</style>
+<p style="margin:0 0 12px"><a href="${esc(guildPath(server))}">← ${esc(guildName)}</a></p>
+<section class="armory" style="--c:${classColor}">
+<div class="ahead"><h2>${esc(member.name)}</h2>
 ${a?.title ? `<div class="muted">${esc(a.title.replace('{name}', member.name))}</div>` : ''}
-<div>${esc(subtitle)}</div></div></div>${factsHtml}</div>${dungeonsHtml}${gear}`;
+<div class="sub">${esc(subtitle)}</div><div class="muted">&lt;${esc(guildName)}&gt;</div></div>
+<div class="badges">${badges}</div>
+${doll}${sheet}
+</section>
+${characterDungeons(server, member)}`;
   return page(`${member.name} · ${guildName}`, body, user, csrf);
 }
