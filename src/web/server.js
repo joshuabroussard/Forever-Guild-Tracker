@@ -6,18 +6,26 @@ import { DEFAULT_SERVER, REGIONS, normalizeServerForm, effectiveSlug } from '../
 import { checkGuild } from '../tracker.js';
 import { buildEmbed } from '../embed.js';
 import { Armory } from '../armory.js';
-import { THEMES } from './themes.js';
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { characterPath } from '../blizzard.js';
 import { guildUrl, charSlug } from '../links.js';
 import { guildPage, characterPage, rankMembers } from './guild-pages.js';
 
 const SECURITY_HEADERS = {
-  'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; img-src https://cdn.discordapp.com https://render.worldofwarcraft.com; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
+  'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; font-src 'self'; img-src https://cdn.discordapp.com https://render.worldofwarcraft.com; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
   'X-Content-Type-Options': 'nosniff',
   'Referrer-Policy': 'same-origin',
   'X-Frame-Options': 'DENY',
 };
 const GUILD_LIST_TTL = 30_000;
+
+// Inter, served from the npm package so pages need no outside font host.
+let INTER;
+function interFont() {
+  INTER ??= readFileSync(fileURLToPath(import.meta.resolve('@fontsource-variable/inter/files/inter-latin-wght-normal.woff2')));
+  return INTER;
+}
 
 // bot: { botPresent(id), postableChannels(id), canManage(id, userId), publish(id), botPermissions }
 export function createWebServer({ env, store, bot, pool, oauth, secureCookies = true, armory = new Armory(pool) }) {
@@ -104,14 +112,8 @@ export function createWebServer({ env, store, bot, pool, oauth, secureCookies = 
     if (!server) return send(res, 404, errorPage(404, 'No public page for that guild here.', user, csrf));
     const emojis = bot.classEmojis ? bot.classEmojis() : {};
     const members = server.lastMembers;
-    // Trying out looks: ?theme=<id> picks one and a cookie keeps it.
-    const asked = url.searchParams.get('theme');
-    const cookieTheme = parseCookies(req.headers.cookie).theme;
-    const theme = asked != null ? (THEMES[asked] || asked === 'default' ? asked : null) : (THEMES[cookieTheme] || cookieTheme === 'default' ? cookieTheme : null);
-    const cache = { 'Cache-Control': theme ? 'private, max-age=60' : 'public, max-age=60' };
-    if (asked != null && theme) cache['Set-Cookie'] = cookie('theme', theme, { maxAge: 30 * 86400, secure: secureCookies });
-    const look = theme && theme !== 'default' ? theme : theme ? 'default' : null;
-    if (!who) return send(res, 200, guildPage({ server, members, emojis, user, csrf, theme: look }), cache);
+    const cache = { 'Cache-Control': 'public, max-age=60' };
+    if (!who) return send(res, 200, guildPage({ server, members, emojis, user, csrf }), cache);
     const member = members.find((m) => charSlug(m.name) === who);
     if (!member) return send(res, 404, errorPage(404, 'That character isn\'t in this guild.', user, csrf));
     const path = member.profilePath || characterPath({}, member.name);
@@ -122,7 +124,7 @@ export function createWebServer({ env, store, bot, pool, oauth, secureCookies = 
     }
     const details = await armory.character(server.region, server.locale, path).catch((e) => ({ error: e.message }));
     const ranked = rankMembers(members, server.baseline);
-    return send(res, 200, characterPage({ server, member, ranked, armory: details, emojis, user, csrf, theme: look }), cache);
+    return send(res, 200, characterPage({ server, member, ranked, armory: details, emojis, user, csrf }), cache);
   }
 
   // What Blizzard says about a character's dungeons, achievements and
@@ -176,6 +178,11 @@ export function createWebServer({ env, store, bot, pool, oauth, secureCookies = 
     const cookies = parseCookies(req.headers.cookie);
     const session = sessions.get(cookies.sid);
     const path = url.pathname;
+
+    if (req.method === 'GET' && path === '/fonts/inter.woff2') {
+      res.writeHead(200, { 'Content-Type': 'font/woff2', 'Cache-Control': 'public, max-age=31536000, immutable', 'X-Content-Type-Options': 'nosniff' });
+      return res.end(interFont());
+    }
 
     if (req.method === 'GET' && path === '/healthz') {
       res.writeHead(200, { 'Content-Type': 'text/plain' });

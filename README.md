@@ -51,12 +51,6 @@ raid, quest, achievement and statistics answers for one character, and
 `npm run probe -- --guild "Guild Name" --raw` does the same from the command
 line.
 
-## Trying other looks
-
-Add `?theme=ironforge`, `questlog`, `neon`, `discord` or `horde` to a guild or
-character page to try a different look (`?theme=default` for the current
-one). A cookie keeps the choice, and a bar at the top flips between them.
-
 ## Adding more to the embed later
 
 Each part of the embed is a section in `src/sections/`. To add raids, gear or

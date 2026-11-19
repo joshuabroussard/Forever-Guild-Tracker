@@ -13,6 +13,7 @@
     "probe": "node --env-file=.env scripts/probe.js"
   },
   "dependencies": {
+    "@fontsource-variable/inter": "^5.3.0",
     "discord.js": "^14.28.1"
   }
 }

@@ -1,9 +1,7 @@
 import { page, esc } from './views.js';
-import { themeBar, themeCss } from './themes.js';
 import { CLASSES } from '../classes.js';
 import { sortByLevel } from '../sections/leveling.js';
 import { characterPagePath, guildPath } from '../links.js';
-import { localDate } from '../state.js';
 import { dungeonBoard } from '../dungeons.js';
 
 // Public pages: a guild summary with the full ranked roster, and an
@@ -32,114 +30,104 @@ export function rankMembers(members, baseline) {
   });
 }
 
-function formatTime(ts, timezone) {
-  if (!ts) return null;
-  return new Intl.DateTimeFormat('en-US', { dateStyle: 'medium', timeStyle: 'short', timeZone: timezone }).format(new Date(ts));
+const GUILD_CSS = `
+.gh{margin:4px 0 18px}.gh .gn{font-size:30px;line-height:1.1;font-weight:800;letter-spacing:-.02em;margin:0;text-transform:none;color:var(--text)}
+.gh .meta{color:var(--muted);font-size:13px;margin-top:6px}
+.comp{display:flex;height:6px;border-radius:3px;overflow:hidden;margin-top:12px;gap:2px}.comp span{display:block;height:100%}
+.today{display:flex;flex-wrap:wrap;gap:6px 14px;align-items:center;font-size:14px;margin:-6px 0 14px}.today a{text-decoration:none;font-weight:600}
+.dg{padding:12px 0;border-top:1px solid var(--line)}.dg:first-of-type{border-top:0;padding-top:0}
+.dh{display:flex;align-items:baseline;gap:8px}.dh b{font-weight:650;font-size:15px}.dh .lv{color:var(--muted);font-size:12px}.dh .ct{margin-left:auto;font-size:13px;color:var(--muted)}.dh .ct b{color:var(--text);font-size:13px}
+.pb{height:4px;border-radius:2px;background:var(--card2);margin:8px 0;overflow:hidden}.pb span{display:block;height:100%;background:var(--accent);border-radius:2px}
+.who{display:flex;flex-wrap:wrap;gap:4px 14px;font-size:14px}.who a{text-decoration:none;font-weight:550}.who a.part{opacity:.55}
+.allc{color:var(--muted);font-size:13px;margin-top:10px}
+table.rk{width:100%;border-collapse:collapse}table.rk td{padding:9px 4px;border-top:1px solid var(--line);vertical-align:middle}table.rk tr:first-child td{border-top:0}
+table.rk td.n{color:var(--muted);width:2em;font-size:13px}table.rk td.c{width:26px}table.rk a{text-decoration:none;font-weight:600}
+table.rk .bar{height:3px;border-radius:2px;background:var(--card2);margin-top:6px;overflow:hidden}table.rk .bar span{display:block;height:100%;border-radius:2px;opacity:.85}
+table.rk td.lv{text-align:right;font-weight:700;font-size:17px;width:2.5em}table.rk td.g{width:2.8em;text-align:right;font-size:13px}
+`;
+
+function nameLink(server, m, extra = '') {
+  return `<a${extra} href="${esc(characterPagePath(server, m.name))}" style="color:${hex(CLASSES[m.classId]?.color)}">${esc(m.name)}</a>`;
 }
 
-function lastSeen(ts, timezone, now = new Date()) {
-  if (!ts) return null;
-  const days = Math.round((Date.parse(localDate(timezone, now)) - Date.parse(localDate(timezone, new Date(ts)))) / 86_400_000);
-  if (days <= 0) return 'today';
-  if (days === 1) return 'yesterday';
-  return `${days} days ago`;
-}
-
-function personChip(server, m, emojis, extra = '') {
-  return `<a class="chip" style="color:inherit;text-decoration:none" href="${esc(characterPagePath(server, m.name))}">${classIconHtml(m.classId, emojis)} ${esc(m.name)} <span class="muted">${m.level}</span>${extra}</a>`;
-}
-
-// One card per dungeon: who still needs a first clear, and who got partway.
-// Dungeons nobody needs fold into one line at the end.
-function dungeonsCard(server, members, emojis) {
+// One row per dungeon with names of who still needs a first clear.
+function dungeonsCard(server, members) {
   if (!server.dungeons || !Object.keys(server.dungeons).length) return '';
   const board = dungeonBoard(members, server.dungeons);
   if (!board.length) return '';
   const open = board.filter((d) => d.needs.length || d.partial.length);
   const cleared = board.filter((d) => !d.needs.length && !d.partial.length && d.done.length);
   const rows = open.map((d) => {
-    const level = d.minLevel ? `<span class="muted">${d.estimated ? '~' : ''}${d.minLevel}+</span>` : '';
     const total = d.done.length + d.partial.length + d.needs.length;
-    const needs = d.needs.map((m) => personChip(server, m, emojis)).join('');
-    const partial = d.partial.map((m) => personChip(server, m, emojis, ' <span class="muted">partway</span>')).join('');
-    return `<div class="row" style="display:block"><div style="display:flex;justify-content:space-between;gap:8px"><b>${esc(d.name)} ${level}</b><span class="muted">${d.done.length} of ${total} cleared</span></div>
-<div class="chips" style="margin-top:6px">${needs}${partial}</div></div>`;
+    const pct = total ? Math.round((d.done.length / total) * 100) : 0;
+    const level = d.minLevel ? `<span class="lv">${d.estimated ? '~' : ''}${d.minLevel}+</span>` : '';
+    const names = [...d.needs.map((m) => nameLink(server, m)), ...d.partial.map((m) => nameLink(server, m, ' class="part" title="Partway"'))].join('');
+    return `<div class="dg"><div class="dh"><b>${esc(d.name)}</b>${level}<span class="ct"><b>${d.done.length}</b>/${total}</span></div>
+<div class="pb"><span style="width:${pct}%"></span></div><div class="who">${names}</div></div>`;
   }).join('');
-  const clearedLine = cleared.length
-    ? `<p class="muted" style="margin:12px 0 0">Everyone high enough has cleared ${cleared.map((d) => esc(d.name)).join(', ')}.</p>`
-    : '';
-  const when = server.dungeonsAt ? formatTime(server.dungeonsAt, server.timezone) : null;
-  return `<div class="card"><h2>Who still needs a first clear</h2>
-<p class="muted" style="margin-top:-6px">Dungeons someone in the guild has cleared, from Blizzard's boss kill counts. Characters below a dungeon's entry level aren't listed (~ means the level is a guess).${when ? ` Checked ${esc(when)}.` : ''}</p>
-${rows || '<p>Everyone high enough has cleared every dungeon the guild has cleared.</p>'}${clearedLine}</div>`;
+  const allc = cleared.length ? `<div class="allc">Everyone's done ${cleared.map((d) => esc(d.name)).join(', ')}</div>` : '';
+  return `<div class="card"><h2>Needs a first clear</h2>${rows || '<div class="allc">Everyone\'s caught up</div>'}${allc}</div>`;
 }
 
-export function guildPage({ server, members, emojis = {}, user, csrf, theme = null }) {
+function shortTime(ts, timezone) {
+  if (!ts) return '';
+  return new Intl.DateTimeFormat('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZone: timezone }).format(new Date(ts));
+}
+
+export function guildPage({ server, members, emojis = {}, user, csrf }) {
   const name = server.wowGuildDisplayName || server.guildName;
   const ranked = rankMembers(members, server.baseline);
   const max = server.leveling?.maxLevel || 60;
   const avg = members.length ? Math.round(members.reduce((s, m) => s + m.level, 0) / members.length) : 0;
-  const atMax = members.filter((m) => m.level >= max).length;
-  const gainedToday = ranked.reduce((s, m) => s + m.gained, 0);
 
   const counts = {};
   for (const m of members) counts[m.classId] = (counts[m.classId] || 0) + 1;
-  const chips = Object.entries(counts)
+  const comp = Object.entries(counts)
     .sort((a, b) => b[1] - a[1])
-    .map(([id, n]) => `<span class="chip">${classIconHtml(id, emojis)} ${esc(CLASSES[id]?.name || 'Other')} <b>${n}</b></span>`)
+    .map(([id, n]) => `<span title="${esc(CLASSES[id]?.name || 'Other')} ${n}" style="flex:${n};background:${hex(CLASSES[id]?.color)}"></span>`)
     .join('');
 
-  const movers = ranked.filter((m) => m.gained > 0).sort((a, b) => b.gained - a.gained).slice(0, 3);
-  const moversHtml = movers.length
-    ? `<div class="card"><h2>Leveled up today</h2><div class="chips">${movers.map((m, i) => `<a class="chip" style="color:inherit;text-decoration:none" href="${esc(characterPagePath(server, m.name))}">${i === 0 ? '👑 ' : ''}${classIconHtml(m.classId, emojis)} ${esc(m.name)} <span class="gain">+${m.gained}</span></a>`).join('')}</div></div>`
+  const movers = ranked.filter((m) => m.gained > 0).sort((a, b) => b.gained - a.gained).slice(0, 4);
+  const today = movers.length
+    ? `<div class="today"><span class="muted">Today</span>${movers.map((m, i) => `<span>${i === 0 ? '👑 ' : ''}${nameLink(server, m)} <span class="gain">+${m.gained}</span></span>`).join('')}</div>`
     : '';
 
   const rows = ranked.map((m) => {
     const color = hex(CLASSES[m.classId]?.color);
     const pct = Math.min(100, Math.round((m.level / max) * 100));
-    return `<tr><td class="n">${m.place}</td><td>${classIconHtml(m.classId, emojis)}</td>
-<td><a href="${esc(characterPagePath(server, m.name))}">${esc(m.name)}</a><div class="muted wide">${esc(m.className || CLASSES[m.classId]?.name || '')}</div></td>
-<td class="wide" style="width:30%"><div class="bar"><span style="width:${pct}%;background:${color}"></span></div></td>
-<td class="lv">${m.level}</td><td style="width:3em">${m.gained ? `<span class="gain">+${m.gained}</span>` : ''}</td></tr>`;
+    return `<tr><td class="n">${m.place}</td><td class="c">${classIconHtml(m.classId, emojis)}</td>
+<td>${nameLink(server, m)}<div class="bar"><span style="width:${pct}%;background:${color}"></span></div></td>
+<td class="lv">${m.level}</td><td class="g">${m.gained ? `<span class="gain">+${m.gained}</span>` : ''}</td></tr>`;
   }).join('');
 
-  const updated = formatTime(server.lastRefreshAt, server.timezone);
-  const body = `<div class="card"><h2 style="font-size:24px;margin-bottom:4px">${esc(name)}</h2>
-<div class="muted">WoW Forever · ${esc(server.region.toUpperCase())}${updated ? ` · updated ${esc(updated)}` : ''}</div>
-<div class="stats" style="margin-top:16px">
-<div class="stat"><b>${members.length}</b><span class="muted">characters</span></div>
-<div class="stat"><b>${avg}</b><span class="muted">average level</span></div>
-<div class="stat"><b>${atMax}</b><span class="muted">at level ${max}</span></div>
-<div class="stat"><b>${gainedToday}</b><span class="muted">levels gained today</span></div>
-</div></div>
-${moversHtml}
-${dungeonsCard(server, members, emojis)}
-<div class="card"><h2>Classes</h2><div class="chips">${chips || '<span class="muted">No characters yet.</span>'}</div></div>
-<div class="card"><h2>Ranking</h2><table class="rank">${rows}</table></div>`;
-  return themed(`${name} · guild`, body, user, csrf, theme, guildPath(server));
+  const updated = shortTime(server.lastRefreshAt, server.timezone);
+  const body = `<style>${GUILD_CSS}</style>
+<section class="gh"><h2 class="gn">${esc(name)}</h2>
+<div class="meta">${members.length} members · avg ${avg}${updated ? ` · ${esc(updated)}` : ''}</div>
+<div class="comp">${comp}</div></section>
+${today}
+${dungeonsCard(server, members)}
+<div class="card"><h2>Roster</h2><table class="rk">${rows}</table></div>`;
+  return page(`${name} · guild`, body, user, csrf);
 }
 
-function noDungeonsText(status, name) {
-  if (status === 'notfound') return `Blizzard has no dungeon record for ${name} yet.`;
-  if (status === 'empty') return `Blizzard's dungeon record for ${name} came back in a form this site can't read yet.`;
-  if (status === 'error') return 'Couldn\'t reach Blizzard for dungeon data on the last check.';
-  return `${name} hasn't killed a dungeon's end boss yet.`;
+function noDungeonsText(status) {
+  if (status === 'notfound') return 'No Blizzard record yet';
+  if (status === 'error') return 'Couldn\'t reach Blizzard';
+  return 'No clears yet';
 }
 
 function characterDungeons(server, member) {
   const mine = server.dungeons?.[member.id];
   if (!mine) return '';
   const board = dungeonBoard([member], server.dungeons);
-  const todo = board.filter((d) => d.needs.length);
-  const partway = board.filter((d) => d.partial.length);
+  const todo = board.filter((d) => d.needs.length || d.partial.length);
   const done = board.filter((d) => d.done.length);
-  const list = (items, fmt) => items.map(fmt).join('');
-  const line = (label, items) => items ? `<div style="margin-top:8px"><span class="muted">${label}</span><div class="chips" style="margin-top:4px">${items}</div></div>` : '';
-  return `<div class="card"><h2>Dungeons</h2>
-${line('Still needs a first clear', list(todo, (d) => `<span class="chip">${esc(d.name)}${d.minLevel ? ` <span class="muted">${d.minLevel}+</span>` : ''}</span>`))}
-${line('Partway', list(partway, (d) => `<span class="chip">${esc(d.name)}</span>`))}
-${line('Cleared', list(done, (d) => `<span class="chip">✓ ${esc(d.name)}${d.done[0].clears > 1 ? ` <span class="muted">×${d.done[0].clears}</span>` : ''}</span>`))}
-${!todo.length && !partway.length && !done.length ? `<p class="muted">${esc(noDungeonsText(server.dungeonStatus?.[member.id], member.name))}</p>` : ''}</div>`;
+  const chips = (items, fmt) => `<div class="chips">${items.map(fmt).join('')}</div>`;
+  const parts = [];
+  if (todo.length) parts.push(`<h2>Needs</h2>${chips(todo, (d) => `<span class="chip">${esc(d.name)}</span>`)}`);
+  if (done.length) parts.push(`<h2${todo.length ? ' style="margin-top:16px"' : ''}>Cleared</h2>${chips(done, (d) => `<span class="chip">${esc(d.name)}${d.done[0].clears > 1 ? ` <span class="muted">×${d.done[0].clears}</span>` : ''}</span>`)}`);
+  return `<div class="card">${parts.join('') || `<h2>Dungeons</h2><span class="muted">${esc(noDungeonsText(server.dungeonStatus?.[member.id]))}</span>`}</div>`;
 }
 
 // Paper-doll layout like the official armory: gear down both sides of the
@@ -155,11 +143,11 @@ const SLOT_NAMES = {
 
 const ARMORY_CSS = `
 main{max-width:1000px}
-.armory{--c:#888;background:radial-gradient(ellipse at 50% 20%,color-mix(in srgb,var(--c) 35%,#0d0f14) 0%,#0d0f14 70%);color:#f2f3f5;border-radius:14px;padding:20px;margin-bottom:16px;border:1px solid #2a2d35}
-.armory .muted{color:#a9aebb}.armory a{color:#e6c35c}
-.ahead h2{font-size:28px;margin:0;color:var(--c)}.ahead .sub{font-size:16px;margin-top:2px}
-.badges{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}.badge{background:#ffffff14;border:1px solid #ffffff22;border-radius:999px;padding:3px 10px;font-size:13px}
-.badge b{color:#e6c35c}
+.armory{--c:#888;background:radial-gradient(ellipse at 50% 18%,color-mix(in srgb,var(--c) 28%,#0f1218) 0%,#0f1218 65%);color:var(--text);border-radius:14px;padding:18px;margin-bottom:12px;border:1px solid var(--line)}
+.armory a{color:var(--accent)}
+.ahead h2{font-size:30px;line-height:1.1;margin:0;color:var(--c);font-weight:800;letter-spacing:-.02em;text-transform:none}.ahead .sub{font-size:14px;margin-top:4px;color:var(--muted)}
+.badges{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}.badge{background:#ffffff10;border-radius:8px;padding:4px 10px;font-size:13px;color:var(--muted)}
+.badge b{color:var(--text);font-weight:700}
 .doll{display:grid;grid-template-columns:minmax(0,1fr) minmax(160px,300px) minmax(0,1fr);gap:8px;margin-top:16px;align-items:start}
 .col{display:flex;flex-direction:column;gap:6px;min-width:0}.col.r .slot{flex-direction:row-reverse;text-align:right}.col.r .tip{left:auto;right:0}
 .fig{display:flex;align-items:flex-end;justify-content:center;min-height:360px}.fig img{max-width:100%;max-height:520px;object-fit:contain}
@@ -176,7 +164,7 @@ main{max-width:1000px}
 .tip .two{display:flex;justify-content:space-between;gap:12px}
 .qPOOR{--q:#9d9d9d}.qCOMMON{--q:#ffffff}.qUNCOMMON{--q:#1eff00}.qRARE{--q:#0070dd}.qEPIC{--q:#a335ee}.qLEGENDARY{--q:#ff8000}.qARTIFACT{--q:#e6cc80}.qHEIRLOOM{--q:#00ccff}
 .sheet{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:12px;margin-top:16px}
-.sheet .grp{background:#ffffff0a;border:1px solid #ffffff18;border-radius:8px;padding:8px 12px}.sheet h3{margin:0 0 4px;font-size:13px;color:#e6c35c;text-transform:uppercase;letter-spacing:.04em}
+.sheet .grp{background:#ffffff08;border-radius:10px;padding:10px 12px}.sheet h3{margin:0 0 6px;font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.1em;font-weight:700}
 .sheet .kv{display:flex;justify-content:space-between;font-size:14px;padding:2px 0}.sheet .kv span:last-child{font-variant-numeric:tabular-nums;font-weight:600}
 @media (max-width:700px){.armory{padding:14px 12px}.ahead h2{font-size:24px}
 .doll{grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:4px 6px}.fig{grid-column:1/3;order:-1;min-height:0;align-items:center}.fig img{max-height:240px}
@@ -219,21 +207,19 @@ function slotHtml(type, item) {
 <span class="nm"><b>${esc(item.name)}</b><span>${esc(SLOT_NAMES[type] || item.slot)}${item.itemLevel ? ` · ${esc(item.itemLevel)}` : ''}</span></span>${tooltip(item)}</div>`;
 }
 
-export function characterPage({ server, member, ranked, armory, emojis = {}, user, csrf, now = new Date(), theme = null }) {
+export function characterPage({ server, member, ranked, armory, emojis = {}, user, csrf }) {
   const guildName = server.wowGuildDisplayName || server.guildName;
   const me = ranked.find((m) => m.id === member.id) || { place: '?', gained: 0 };
   const a = armory?.found ? armory : null;
   const level = Math.max(member.level, a?.level || 0);
   const className = a?.className || member.className || CLASSES[member.classId]?.name || '';
-  const subtitle = [`Level ${level}`, a?.race, className].filter(Boolean).join(' ');
+  const subtitle = [level, a?.race, className].filter(Boolean).join(' ');
   const classColor = hex(CLASSES[member.classId]?.color);
 
   const badges = [
-    a?.itemLevel ? `<span class="badge">Item level <b>${esc(a.itemLevel)}</b></span>` : '',
-    `<span class="badge">Guild rank <b>#${esc(me.place)}</b> of ${ranked.length}</span>`,
-    me.gained ? `<span class="badge">Today <b>+${me.gained}</b></span>` : '',
-    a?.faction ? `<span class="badge">${esc(a.faction)}</span>` : '',
-    a?.lastLogin ? `<span class="badge">Online ${esc(lastSeen(a.lastLogin, server.timezone, now))}</span>` : '',
+    a?.itemLevel ? `<span class="badge"><b>${esc(a.itemLevel)}</b> ilvl</span>` : '',
+    `<span class="badge"><b>#${esc(me.place)}</b> in guild</span>`,
+    me.gained ? `<span class="badge"><b>+${me.gained}</b> today</span>` : '',
   ].join('');
 
   let doll = '';
@@ -249,9 +235,9 @@ export function characterPage({ server, member, ranked, armory, emojis = {}, use
 </div>
 <div class="weap">${WEAPONS.filter((t) => bySlot[t] || t !== 'OFF_HAND').map((t) => slotHtml(t, bySlot[t])).join('')}${extra.map((i) => slotHtml(i.slotType, i)).join('')}</div>`;
   } else if (armory && !armory.found && !armory.error) {
-    doll = `<p class="muted" style="margin-top:16px">Blizzard hasn't published the armory page for ${esc(member.name)} yet. That happens once they're level 10 and have logged out once.</p>`;
+    doll = '<p class="muted" style="margin-top:16px">No armory yet (level 10 and a logout needed)</p>';
   } else if (armory?.error) {
-    doll = `<p class="muted" style="margin-top:16px">Couldn't reach Blizzard's armory just now, so gear isn't shown. Try again in a few minutes.</p>`;
+    doll = '<p class="muted" style="margin-top:16px">Couldn\'t reach Blizzard, try again shortly</p>';
   }
 
   const sheet = a?.stats?.length
@@ -259,21 +245,13 @@ export function characterPage({ server, member, ranked, armory, emojis = {}, use
     : '';
 
   const body = `<style>${ARMORY_CSS}</style>
-<p style="margin:0 0 12px"><a href="${esc(guildPath(server))}">← ${esc(guildName)}</a></p>
+<p style="margin:0 0 12px;font-size:14px"><a href="${esc(guildPath(server))}" style="text-decoration:none">← ${esc(guildName)}</a></p>
 <section class="armory" style="--c:${classColor}">
 <div class="ahead"><h2>${esc(member.name)}</h2>
-${a?.title ? `<div class="muted">${esc(a.title.replace('{name}', member.name))}</div>` : ''}
-<div class="sub">${esc(subtitle)}</div><div class="muted">&lt;${esc(guildName)}&gt;</div></div>
+<div class="sub">${esc(subtitle)}${a?.title ? ` · ${esc(a.title.replace('{name}', member.name))}` : ''}</div></div>
 <div class="badges">${badges}</div>
 ${doll}${sheet}
 </section>
 ${characterDungeons(server, member)}`;
-  return themed(`${member.name} · ${guildName}`, body, user, csrf, theme, characterPagePath(server, member.name));
-}
-
-// While someone is trying looks, show the picker bar and lay the chosen
-// theme's CSS over the page.
-function themed(title, body, user, csrf, theme, path) {
-  if (!theme) return page(title, body, user, csrf);
-  return page(title, themeBar(theme, path) + body, user, csrf, { tail: `<style>${themeCss(theme)}</style>` });
+  return page(`${member.name} · ${guildName}`, body, user, csrf);
 }

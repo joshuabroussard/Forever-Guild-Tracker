@@ -166,21 +166,24 @@ test('guild and character pages are public, ranked, and escaped', async () => {
   assert.match(res.headers.get('content-security-policy'), /render\.worldofwarcraft\.com/);
   const html = await res.text();
   assert.match(html, /Ashen &lt;b&gt;Oath&lt;\/b&gt;/);
-  assert.match(html, /👑 .*Thrall Stormborn <span class="gain">\+5<\/span>/);
+  assert.match(html, /3 members · avg 35/);
+  assert.match(html, /👑 <a href="\/g\/us\/ashen-oaths-watch\/thrall-stormborn"[^>]*>Thrall Stormborn<\/a> <span class="gain">\+5<\/span>/);
   assert.match(html, /<td class="n">2<\/td>.*Bo.*<td class="n">2<\/td>.*Mira/s); // tied levels share a place
-  assert.match(html, /href="\/g\/us\/ashen-oaths-watch\/thrall-stormborn"/);
-  const needs = html.slice(html.indexOf('Who still needs a first clear'));
-  assert.match(needs, /The Deadmines <span class="muted">17\+<\/span>/);
-  assert.match(needs, /1 of 3 cleared/);
-  assert.match(needs, /Bo <span class="muted">22<\/span><\/a>.*Mira <span class="muted">22<\/span> <span class="muted">partway/s);
+  const needs = html.slice(html.indexOf('Needs a first clear'));
+  assert.match(needs, /<b>The Deadmines<\/b><span class="lv">17\+<\/span><span class="ct"><b>1<\/b>\/3<\/span>/);
+  assert.match(needs, />Bo<\/a><a class="part" title="Partway"[^>]*>Mira<\/a>/);
 
   const char = await get('/g/us/ashen-oaths-watch/thrall-stormborn');
   assert.equal(char.status, 200);
   const ch = await char.text();
-  assert.match(ch, /Guild rank <b>#1<\/b> of 3/);
-  assert.match(ch, /Today <b>\+5<\/b>/);
-  assert.match(ch, /✓ The Deadmines <span class="muted">×3/);
-  assert.match(await (await get('/g/us/ashen-oaths-watch/bo')).text(), /Still needs a first clear.*The Deadmines/s);
+  assert.match(ch, /<b>#1<\/b> in guild/);
+  assert.match(ch, /<b>\+5<\/b> today/);
+  assert.match(ch, /Cleared<\/h2><div class="chips"><span class="chip">The Deadmines <span class="muted">×3/);
+  assert.match(await (await get('/g/us/ashen-oaths-watch/bo')).text(), /Needs<\/h2><div class="chips"><span class="chip">The Deadmines/);
+
+  const font = await get('/fonts/inter.woff2');
+  assert.equal(font.status, 200);
+  assert.equal(font.headers.get('content-type'), 'font/woff2');
 
   const raw = await get('/g/us/ashen-oaths-watch/thrall-stormborn/raw');
   assert.equal(raw.status, 200);
@@ -188,17 +191,6 @@ test('guild and character pages are public, ranked, and escaped', async () => {
   const rawBody = await raw.json();
   assert.ok('dungeons' in rawBody && 'achievements' in rawBody && 'statistics' in rawBody);
   assert.equal((await get('/g/us/ashen-oaths-watch/thrall-stormborn/other')).status, 404);
-
-  const themedRes = await get('/g/us/ashen-oaths-watch?theme=horde');
-  assert.equal(themedRes.status, 200);
-  assert.match(themedRes.headers.get('set-cookie'), /theme=horde/);
-  assert.match(themedRes.headers.get('cache-control'), /private/);
-  const themedHtml = await themedRes.text();
-  assert.match(themedHtml, /class="tbar"/);
-  assert.match(themedHtml, /aria-current="true">5\. Horde/);
-  assert.match(await (await get('/g/us/ashen-oaths-watch/thrall-stormborn', 'theme=neon')).text(), /aria-current="true">3\. Neon raid/);
-  assert.doesNotMatch(await (await get('/g/us/ashen-oaths-watch?theme=<x>')).text(), /class="tbar"/);
-  assert.doesNotMatch(await (await get('/g/us/ashen-oaths-watch')).text(), /class="tbar"/);
 
   assert.equal((await get('/g/us/ashen-oaths-watch/nobody')).status, 404);
   assert.equal((await get('/g/us/some-other-guild')).status, 404);
@@ -238,7 +230,7 @@ test('character page lays gear out like the armory, with tooltips', async () => 
   ];
   items[0].icon = 'https://render.worldofwarcraft.com/icons/56/inv_helmet.jpg';
   const html = characterPage({ server, member, ranked: [{ ...member, place: 1, gained: 0 }], armory: { found: true, level: 36, race: 'Night Elf', className: 'Druid', items, stats: [], render: 'https://render.worldofwarcraft.com/forever-us/x-main-raw.png' } });
-  assert.match(html, /Level 36 Night Elf Druid/);
+  assert.match(html, />36 Night Elf Druid</);
   assert.match(html, /class="slot qRARE" tabindex="0"[^>]*><span class="ic" style="background-image:url\('https:\/\/render\.worldofwarcraft\.com\/icons\/56\/inv_helmet\.jpg'\)"/);
   assert.match(html, /<div class="tip" role="tooltip"><div class="t">Defender&#39;s Leather Hood<\/div><div class="y">Item Level 25<\/div><div>Binds when equipped<\/div>/);
   assert.match(html, /60 - 91 Damage<\/span><span>Speed 3\.50/);
