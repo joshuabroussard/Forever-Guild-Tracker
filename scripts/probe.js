@@ -2,10 +2,12 @@
 // short summary of each, so we can see what data is really there.
 // Usage: npm run probe -- "Character Name" [region]
 //        npm run probe -- --guild "Guild Name" [region]   (probes the top character)
+// Add --raw to also print the full dungeon answer.
 import { loadEnv, slugify } from '../src/config.js';
 import { BlizzardClient, parseRoster } from '../src/blizzard.js';
 
-const args = process.argv.slice(2);
+const raw = process.argv.includes('--raw');
+const args = process.argv.slice(2).filter((a) => a !== '--raw');
 const byGuild = args[0] === '--guild';
 const name = byGuild ? args[1] : args[0];
 const region = (byGuild ? args[2] : args[1]) || 'us';
@@ -44,6 +46,14 @@ for (const sub of subs) {
     console.log(`\nOK   ${sub || '(profile)'}\n     ${summarize(body).slice(0, 600)}`);
   } catch (e) {
     console.log(`\n--   ${sub || '(profile)'}: ${e.status === 404 ? 'not found' : e.message}`);
+  }
+}
+
+if (raw) {
+  try {
+    console.log('\nFull /encounters/dungeons answer:\n' + JSON.stringify(await client.get(path + '/encounters/dungeons', 'profile'), null, 1).slice(0, 6000));
+  } catch (e) {
+    console.log(`\nFull /encounters/dungeons answer: ${e.message}`);
   }
 }
 

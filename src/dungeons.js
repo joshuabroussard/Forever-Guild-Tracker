@@ -24,53 +24,96 @@ export function dungeonMinLevel(name) {
 }
 
 // { [instanceId]: { name, status: 'done' | 'partial', clears } }
+// Retail nests dungeons as expansions > instances > modes > progress >
+// encounters. Forever's shape isn't documented, so this walks the whole
+// response and takes anything that looks like a dungeon entry: an object
+// naming an instance (or dungeon) with modes, progress or boss encounters.
 export function parseDungeons(body) {
   const out = {};
-  for (const exp of body?.expansions || []) {
-    for (const inst of exp.instances || []) {
-      const id = inst.instance?.id ?? inst.instance?.name;
-      if (id == null) continue;
-      let done = false;
-      let partial = false;
-      let clears = 0;
-      for (const mode of inst.modes || []) {
-        const p = mode.progress || {};
-        const bosses = p.encounters || [];
-        const complete = mode.status?.type === 'COMPLETE' || (p.total_count > 0 && p.completed_count >= p.total_count);
-        if (complete) {
-          done = true;
-          const counts = bosses.map((b) => Number(b.completed_count) || 0).filter((n) => n > 0);
-          clears += counts.length ? Math.min(...counts) : 1;
-        } else if (p.completed_count > 0 || bosses.some((b) => b.completed_count > 0)) {
-          partial = true;
-        }
-      }
-      if (done || partial) out[id] = { name: inst.instance?.name || String(id), status: done ? 'done' : 'partial', clears };
+  const seen = new Set();
+  const walk = (node) => {
+    if (!node || typeof node !== 'object' || seen.has(node)) return;
+    seen.add(node);
+    if (Array.isArray(node)) return node.forEach(walk);
+    const inst = node.instance || node.dungeon;
+    if (inst && typeof inst === 'object' && (node.modes || node.progress || node.encounters || node.status)) {
+      addInstance(out, inst, node);
+      return;
     }
-  }
+    for (const [k, v] of Object.entries(node)) if (k !== '_links' && k !== 'character') walk(v);
+  };
+  walk(body);
   return out;
 }
 
+function addInstance(out, inst, node) {
+  const id = inst.id ?? inst.name;
+  if (id == null) return;
+  let done = false;
+  let partial = false;
+  let clears = 0;
+  for (const mode of node.modes || [node]) {
+    const p = mode.progress || mode;
+    const bosses = p.encounters || mode.encounters || [];
+    const kills = bosses.map((b) => Number(b.completed_count ?? b.count) || 0);
+    const total = Number(p.total_count) || bosses.length;
+    const completed = Number(p.completed_count ?? kills.filter((n) => n > 0).length) || 0;
+    const complete = mode.status?.type === 'COMPLETE' || (total > 0 && completed >= total);
+    if (complete) {
+      done = true;
+      const counts = kills.filter((n) => n > 0);
+      clears += counts.length ? Math.min(...counts) : 1;
+    } else if (completed > 0 || kills.some((n) => n > 0)) {
+      partial = true;
+    }
+  }
+  if (done || partial) {
+    const prev = out[id];
+    out[id] = {
+      name: inst.name || prev?.name || String(id),
+      status: done || prev?.status === 'done' ? 'done' : 'partial',
+      clears: (prev?.clears || 0) + clears,
+    };
+  }
+}
+
 // Looks up dungeon progress for characters level 10+ (Blizzard has no profile
-// below that), a few at a time. A character Blizzard doesn't know yet counts
-// as having done nothing; one that errors keeps its last known data.
-export async function fetchDungeons(client, members, previous = {}, { concurrency = 3 } = {}) {
-  const out = {};
+// below that), a few at a time. Returns { dungeons, status } where status
+// says, per character, whether Blizzard had data ('ok'), had nothing for them
+// ('notfound'), answered with nothing we could read ('empty') or failed
+// ('error', last known data kept). A short summary goes to the log.
+export async function fetchDungeons(client, members, previous = {}, { concurrency = 3, log = console.log } = {}) {
+  const dungeons = {};
+  const status = {};
+  let shapeLogged = false;
   const todo = members.filter((m) => m.profilePath && m.level >= 10);
   let next = 0;
   async function worker() {
     while (next < todo.length) {
       const m = todo[next++];
       try {
-        out[m.id] = parseDungeons(await client.getDungeons(m.profilePath));
+        const body = await client.getDungeons(m.profilePath);
+        dungeons[m.id] = parseDungeons(body);
+        status[m.id] = Object.keys(dungeons[m.id]).length ? 'ok' : 'empty';
+        if (status[m.id] === 'empty' && !shapeLogged && body && Object.keys(body).some((k) => !['_links', 'character'].includes(k))) {
+          shapeLogged = true;
+          log(`Dungeons: couldn't read the answer for ${m.name}; it starts ${JSON.stringify(body).slice(0, 400)}`);
+        }
       } catch (e) {
-        if (e.status === 404) out[m.id] = {};
-        else if (previous[m.id]) out[m.id] = previous[m.id];
+        if (e.status === 404) {
+          dungeons[m.id] = {};
+          status[m.id] = 'notfound';
+        } else {
+          if (previous[m.id]) dungeons[m.id] = previous[m.id];
+          status[m.id] = 'error';
+        }
       }
     }
   }
   await Promise.all(Array.from({ length: Math.min(concurrency, todo.length) }, worker));
-  return out;
+  const counts = Object.values(status).reduce((c, s) => ({ ...c, [s]: (c[s] || 0) + 1 }), {});
+  log(`Dungeons: checked ${todo.length} characters: ${Object.entries(counts).map(([k, n]) => `${n} ${k}`).join(', ') || 'none'}.`);
+  return { dungeons, status };
 }
 
 // Per dungeon: who has cleared it, who got partway, and who still needs a

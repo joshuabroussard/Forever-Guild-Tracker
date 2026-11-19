@@ -252,11 +252,33 @@ test('dungeons are read about once an hour, only for level 10+', async () => {
   const pool = new BlizzardPool({ clientId: 'x', clientSecret: 'y', fetchImpl: fetch });
   let s = { ...server };
   const t0 = new Date('2026-11-19T06:00:00Z');
-  s = { ...s, ...(await refreshServer(pool, s, { refreshMinutes: 15, now: t0 })).patch };
+  s = { ...s, ...(await refreshServer(pool, s, { refreshMinutes: 15, now: t0, dungeonLog: () => {} })).patch };
+  assert.deepEqual(s.dungeonStatus, { 1: 'ok' });
   assert.equal(dungeonCalls, 1); // Tiny is under 10, so only Thrall
   assert.equal(s.dungeons[1][1].status, 'done');
   s = { ...s, ...(await refreshServer(pool, s, { refreshMinutes: 15, now: new Date(t0.getTime() + 15 * 60_000) })).patch };
   assert.equal(dungeonCalls, 1);
   s = { ...s, ...(await refreshServer(pool, s, { refreshMinutes: 15, now: new Date(t0.getTime() + 61 * 60_000) })).patch };
   assert.equal(dungeonCalls, 2);
+});
+
+test('dungeon reader also takes flatter shapes and says when it can\'t read one', async () => {
+  const { parseDungeons, fetchDungeons } = await import('../src/dungeons.js');
+  const flat = { dungeons: [
+    { dungeon: { id: 5, name: 'Ragefire Chasm' }, encounters: [{ completed_count: 2 }, { completed_count: 1 }] },
+    { dungeon: { id: 6, name: 'Wailing Caverns' }, encounters: [{ completed_count: 1 }, { completed_count: 0 }] },
+  ] };
+  assert.deepEqual(parseDungeons(flat), {
+    5: { name: 'Ragefire Chasm', status: 'done', clears: 1 },
+    6: { name: 'Wailing Caverns', status: 'partial', clears: 0 },
+  });
+  const logs = [];
+  const client = { getDungeons: async (p) => (p.endsWith('a') ? { something: [{ odd: 1 }] } : Promise.reject(Object.assign(new Error('nf'), { status: 404 }))) };
+  const { status } = await fetchDungeons(client, [
+    { id: 1, name: 'A', level: 30, profilePath: '/x/a' },
+    { id: 2, name: 'B', level: 30, profilePath: '/x/b' },
+  ], {}, { log: (l) => logs.push(l) });
+  assert.deepEqual(status, { 1: 'empty', 2: 'notfound' });
+  assert.match(logs.join('\n'), /couldn't read the answer for A; it starts \{"something"/);
+  assert.match(logs.join('\n'), /checked 2 characters: 1 empty, 1 notfound/);
 });

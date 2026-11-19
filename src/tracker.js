@@ -6,6 +6,8 @@ import { guildUrl } from './links.js';
 import { fetchDungeons } from './dungeons.js';
 
 const DUNGEON_EVERY_MS = 60 * 60_000;
+// Bump when the dungeon reader changes, so stored results are re-read at once.
+const DUNGEON_READER = 2;
 
 // One Blizzard client per region, shared by every server.
 export class BlizzardPool {
@@ -67,7 +69,7 @@ export async function withProfileLevels(client, members, { concurrency = 4 } = {
 // Pulls the roster for one server's WoW guild and builds its embed.
 // Returns the embed and the tracking fields to save. On failure it keeps the
 // last good data and puts the reason in the footer.
-export async function refreshServer(pool, server, { refreshMinutes, emojis = {}, now = new Date(), publicUrl = null }) {
+export async function refreshServer(pool, server, { refreshMinutes, emojis = {}, now = new Date(), publicUrl = null, dungeonLog = console.log }) {
   const slug = effectiveSlug(server);
   const client = pool.for(server.region, server.locale);
   let members = server.lastMembers || [];
@@ -81,8 +83,9 @@ export async function refreshServer(pool, server, { refreshMinutes, emojis = {},
     displayName = parsed.guildName || displayName;
     tracking = updateBaseline(tracking, members, server.timezone, now);
     // Dungeon clears change slowly, so they're read about once an hour.
-    if (!server.dungeonsAt || now - new Date(server.dungeonsAt) >= DUNGEON_EVERY_MS) {
-      dungeonPatch = { dungeons: await fetchDungeons(client, members, server.dungeons || {}), dungeonsAt: now.toISOString() };
+    if (!server.dungeonsAt || server.dungeonReader !== DUNGEON_READER || now - new Date(server.dungeonsAt) >= DUNGEON_EVERY_MS) {
+      const { dungeons, status } = await fetchDungeons(client, members, server.dungeons || {}, { log: dungeonLog });
+      dungeonPatch = { dungeons, dungeonStatus: status, dungeonsAt: now.toISOString(), dungeonReader: DUNGEON_READER };
     }
   } catch (e) {
     error = describeError(e, slug);
