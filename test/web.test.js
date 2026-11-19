@@ -189,6 +189,17 @@ test('guild and character pages are public, ranked, and escaped', async () => {
   assert.ok('dungeons' in rawBody && 'achievements' in rawBody && 'statistics' in rawBody);
   assert.equal((await get('/g/us/ashen-oaths-watch/thrall-stormborn/other')).status, 404);
 
+  const themedRes = await get('/g/us/ashen-oaths-watch?theme=horde');
+  assert.equal(themedRes.status, 200);
+  assert.match(themedRes.headers.get('set-cookie'), /theme=horde/);
+  assert.match(themedRes.headers.get('cache-control'), /private/);
+  const themedHtml = await themedRes.text();
+  assert.match(themedHtml, /class="tbar"/);
+  assert.match(themedHtml, /aria-current="true">5\. Horde/);
+  assert.match(await (await get('/g/us/ashen-oaths-watch/thrall-stormborn', 'theme=neon')).text(), /aria-current="true">3\. Neon raid/);
+  assert.doesNotMatch(await (await get('/g/us/ashen-oaths-watch?theme=<x>')).text(), /class="tbar"/);
+  assert.doesNotMatch(await (await get('/g/us/ashen-oaths-watch')).text(), /class="tbar"/);
+
   assert.equal((await get('/g/us/ashen-oaths-watch/nobody')).status, 404);
   assert.equal((await get('/g/us/some-other-guild')).status, 404);
   assert.equal((await get('/g/us/%E0%A4%A')).status, 404);

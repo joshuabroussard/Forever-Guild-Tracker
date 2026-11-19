@@ -1,4 +1,5 @@
 import { page, esc } from './views.js';
+import { themeBar, themeCss } from './themes.js';
 import { CLASSES } from '../classes.js';
 import { sortByLevel } from '../sections/leveling.js';
 import { characterPagePath, guildPath } from '../links.js';
@@ -73,7 +74,7 @@ function dungeonsCard(server, members, emojis) {
 ${rows || '<p>Everyone high enough has cleared every dungeon the guild has run.</p>'}${clearedLine}</div>`;
 }
 
-export function guildPage({ server, members, emojis = {}, user, csrf }) {
+export function guildPage({ server, members, emojis = {}, user, csrf, theme = null }) {
   const name = server.wowGuildDisplayName || server.guildName;
   const ranked = rankMembers(members, server.baseline);
   const max = server.leveling?.maxLevel || 60;
@@ -115,7 +116,7 @@ ${moversHtml}
 ${dungeonsCard(server, members, emojis)}
 <div class="card"><h2>Classes</h2><div class="chips">${chips || '<span class="muted">No characters yet.</span>'}</div></div>
 <div class="card"><h2>Ranking</h2><table class="rank">${rows}</table></div>`;
-  return page(`${name} · guild`, body, user, csrf);
+  return themed(`${name} · guild`, body, user, csrf, theme, guildPath(server));
 }
 
 function noDungeonsText(status, name) {
@@ -218,7 +219,7 @@ function slotHtml(type, item) {
 <span class="nm"><b>${esc(item.name)}</b><span>${esc(SLOT_NAMES[type] || item.slot)}${item.itemLevel ? ` · ${esc(item.itemLevel)}` : ''}</span></span>${tooltip(item)}</div>`;
 }
 
-export function characterPage({ server, member, ranked, armory, emojis = {}, user, csrf, now = new Date() }) {
+export function characterPage({ server, member, ranked, armory, emojis = {}, user, csrf, now = new Date(), theme = null }) {
   const guildName = server.wowGuildDisplayName || server.guildName;
   const me = ranked.find((m) => m.id === member.id) || { place: '?', gained: 0 };
   const a = armory?.found ? armory : null;
@@ -267,5 +268,12 @@ ${a?.title ? `<div class="muted">${esc(a.title.replace('{name}', member.name))}<
 ${doll}${sheet}
 </section>
 ${characterDungeons(server, member)}`;
-  return page(`${member.name} · ${guildName}`, body, user, csrf);
+  return themed(`${member.name} · ${guildName}`, body, user, csrf, theme, characterPagePath(server, member.name));
+}
+
+// While someone is trying looks, show the picker bar and lay the chosen
+// theme's CSS over the page.
+function themed(title, body, user, csrf, theme, path) {
+  if (!theme) return page(title, body, user, csrf);
+  return page(title, themeBar(theme, path) + body, user, csrf, { tail: `<style>${themeCss(theme)}</style>` });
 }

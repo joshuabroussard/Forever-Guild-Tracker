@@ -6,6 +6,7 @@ import { DEFAULT_SERVER, REGIONS, normalizeServerForm, effectiveSlug } from '../
 import { checkGuild } from '../tracker.js';
 import { buildEmbed } from '../embed.js';
 import { Armory } from '../armory.js';
+import { THEMES } from './themes.js';
 import { characterPath } from '../blizzard.js';
 import { guildUrl, charSlug } from '../links.js';
 import { guildPage, characterPage, rankMembers } from './guild-pages.js';
@@ -103,8 +104,14 @@ export function createWebServer({ env, store, bot, pool, oauth, secureCookies = 
     if (!server) return send(res, 404, errorPage(404, 'No public page for that guild here.', user, csrf));
     const emojis = bot.classEmojis ? bot.classEmojis() : {};
     const members = server.lastMembers;
-    const cache = { 'Cache-Control': 'public, max-age=60' };
-    if (!who) return send(res, 200, guildPage({ server, members, emojis, user, csrf }), cache);
+    // Trying out looks: ?theme=<id> picks one and a cookie keeps it.
+    const asked = url.searchParams.get('theme');
+    const cookieTheme = parseCookies(req.headers.cookie).theme;
+    const theme = asked != null ? (THEMES[asked] || asked === 'default' ? asked : null) : (THEMES[cookieTheme] || cookieTheme === 'default' ? cookieTheme : null);
+    const cache = { 'Cache-Control': theme ? 'private, max-age=60' : 'public, max-age=60' };
+    if (asked != null && theme) cache['Set-Cookie'] = cookie('theme', theme, { maxAge: 30 * 86400, secure: secureCookies });
+    const look = theme && theme !== 'default' ? theme : theme ? 'default' : null;
+    if (!who) return send(res, 200, guildPage({ server, members, emojis, user, csrf, theme: look }), cache);
     const member = members.find((m) => charSlug(m.name) === who);
     if (!member) return send(res, 404, errorPage(404, 'That character isn\'t in this guild.', user, csrf));
     const path = member.profilePath || characterPath({}, member.name);
@@ -115,7 +122,7 @@ export function createWebServer({ env, store, bot, pool, oauth, secureCookies = 
     }
     const details = await armory.character(server.region, server.locale, path).catch((e) => ({ error: e.message }));
     const ranked = rankMembers(members, server.baseline);
-    return send(res, 200, characterPage({ server, member, ranked, armory: details, emojis, user, csrf }), cache);
+    return send(res, 200, characterPage({ server, member, ranked, armory: details, emojis, user, csrf, theme: look }), cache);
   }
 
   // What Blizzard says about a character's dungeons, achievements and

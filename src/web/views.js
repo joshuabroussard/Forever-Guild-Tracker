@@ -35,11 +35,11 @@ table.rank a{color:var(--text);text-decoration:none;font-weight:500}table.rank a
 @media (max-width:520px){.wide{display:none}}
 `;
 
-export function page(title, body, user, csrf) {
+export function page(title, body, user, csrf, { tail = '' } = {}) {
   const nav = user
     ? `<form method="post" action="/logout" style="margin:0"><input type="hidden" name="csrf" value="${esc(csrf)}"><span class="muted">${esc(user.username)}</span> <button class="btn">Sign out</button></form>`
     : '';
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>${esc(title)}</title><style>${CSS}</style></head><body><main><header><h1><a href="/" style="color:inherit;text-decoration:none">Guild tracker</a></h1>${nav}</header>${body}</main></body></html>`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex"><title>${esc(title)}</title><style>${CSS}</style></head><body><main><header><h1><a href="/" style="color:inherit;text-decoration:none">Guild tracker</a></h1>${nav}</header>${body}${tail}</main></body></html>`;
 }
 
 function serverIcon(s) {
