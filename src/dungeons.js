@@ -158,7 +158,15 @@ export function dungeonBoard(members, byMember = {}) {
   const known = members.filter((m) => byMember[m.id]);
   return [...dungeons.entries()]
     .map(([id, name]) => {
-      const minLevel = dungeonMinLevel(name);
+      // Forever's own dungeons (Ruins of Lordaeron, City of Dalaran) have no
+      // known entry level, so guess it as the lowest level of anyone who
+      // has cleared it.
+      let minLevel = dungeonMinLevel(name);
+      let estimated = false;
+      if (minLevel == null) {
+        const clearers = known.filter((m) => byMember[m.id][id]?.status === 'done').map((m) => m.level);
+        if (clearers.length) { minLevel = Math.min(...clearers); estimated = true; }
+      }
       const done = [];
       const partial = [];
       const needs = [];
@@ -168,7 +176,7 @@ export function dungeonBoard(members, byMember = {}) {
         else if (minLevel == null || m.level >= minLevel) (d?.status === 'partial' ? partial : needs).push(m);
       }
       const byLevel = (a, b) => b.level - a.level || a.name.localeCompare(b.name);
-      return { id, name, minLevel, done: done.sort(byLevel), partial: partial.sort(byLevel), needs: needs.sort(byLevel) };
+      return { id, name, minLevel, estimated, done: done.sort(byLevel), partial: partial.sort(byLevel), needs: needs.sort(byLevel) };
     })
     .sort((a, b) => (a.minLevel ?? 999) - (b.minLevel ?? 999) || a.name.localeCompare(b.name));
 }

@@ -276,6 +276,11 @@ test('dungeon board lists who still needs a first clear, skipping characters too
   assert.deepEqual(sfk.partial.map((m) => m.name), ['Thrall']);
   assert.deepEqual(sfk.needs.map((m) => m.name), []); // Mira is 20, below 22
   assert.deepEqual(board.map((d) => d.name), ['The Deadmines', 'Shadowfang Keep']);
+  const forever = dungeonBoard(members, {
+    1: {}, 2: { r: { name: 'Ruins of Lordaeron', status: 'done', clears: 1 } }, 3: {}, 4: {},
+  })[0];
+  assert.deepEqual([forever.minLevel, forever.estimated], [20, true]);
+  assert.deepEqual(forever.needs.map((m) => m.name), ['Thrall']); // Bo and Tiny are below 20
 });
 
 test('dungeons are read about once an hour, only for level 10+', async () => {

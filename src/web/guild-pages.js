@@ -58,7 +58,7 @@ function dungeonsCard(server, members, emojis) {
   const open = board.filter((d) => d.needs.length || d.partial.length);
   const cleared = board.filter((d) => !d.needs.length && !d.partial.length && d.done.length);
   const rows = open.map((d) => {
-    const level = d.minLevel ? `<span class="muted">${d.minLevel}+</span>` : '';
+    const level = d.minLevel ? `<span class="muted">${d.estimated ? '~' : ''}${d.minLevel}+</span>` : '';
     const total = d.done.length + d.partial.length + d.needs.length;
     const needs = d.needs.map((m) => personChip(server, m, emojis)).join('');
     const partial = d.partial.map((m) => personChip(server, m, emojis, ' <span class="muted">partway</span>')).join('');
@@ -70,8 +70,8 @@ function dungeonsCard(server, members, emojis) {
     : '';
   const when = server.dungeonsAt ? formatTime(server.dungeonsAt, server.timezone) : null;
   return `<div class="card"><h2>Who still needs a first clear</h2>
-<p class="muted" style="margin-top:-6px">Dungeons anyone in the guild has run. Characters below a dungeon's entry level aren't listed.${when ? ` Checked ${esc(when)}.` : ''}</p>
-${rows || '<p>Everyone high enough has cleared every dungeon the guild has run.</p>'}${clearedLine}</div>`;
+<p class="muted" style="margin-top:-6px">Dungeons someone in the guild has cleared, from Blizzard's boss kill counts. Characters below a dungeon's entry level aren't listed (~ means the level is a guess).${when ? ` Checked ${esc(when)}.` : ''}</p>
+${rows || '<p>Everyone high enough has cleared every dungeon the guild has cleared.</p>'}${clearedLine}</div>`;
 }
 
 export function guildPage({ server, members, emojis = {}, user, csrf, theme = null }) {
