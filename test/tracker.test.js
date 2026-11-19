@@ -254,8 +254,8 @@ test('dungeon progress is parsed into cleared and partway', async () => {
   assert.deepEqual(parseDungeons({}), {});
 });
 
-test('dungeon board lists who still needs a first clear, skipping characters too low', async () => {
-  const { dungeonBoard } = await import('../src/dungeons.js');
+test('dungeon board covers every Forever dungeon and lists everyone who has not cleared it', async () => {
+  const { dungeonBoard, DUNGEONS, parseBossKills } = await import('../src/dungeons.js');
   const members = [
     { id: 1, name: 'Thrall', level: 30, classId: 7 },
     { id: 2, name: 'Mira', level: 20, classId: 5 },
@@ -263,26 +263,29 @@ test('dungeon board lists who still needs a first clear, skipping characters too
     { id: 4, name: 'Tiny', level: 4, classId: 1 },
   ];
   const board = dungeonBoard(members, {
-    1: { 10: { name: 'The Deadmines', status: 'done', clears: 1 }, 11: { name: 'Shadowfang Keep', status: 'partial', clears: 0 } },
-    2: {},
-    3: { 10: { name: 'The Deadmines', status: 'partial', clears: 0 } },
+    1: { 10: { name: 'The Deadmines', status: 'done', clears: 1 }, sfk: { name: 'Shadowfang Keep', status: 'partial', clears: 0 } },
+    2: { 'city of dalaran': { name: 'City of Dalaran', status: 'done', clears: 2 }, x: { name: 'Mystery Vault', status: 'done', clears: 1 } },
+    3: { deadmines: { name: 'Deadmines', status: 'partial', clears: 0 } },
   });
-  const dm = board.find((d) => d.name === 'The Deadmines');
-  assert.equal(dm.minLevel, 17);
+  assert.equal(DUNGEONS.length, 35);
+  assert.equal(board.length, 36); // the 35 plus one the statistics named that isn't on the list
+  assert.deepEqual(board.slice(0, 3).map((d) => d.name), ['Ragefire Chasm', 'Hall of Thanes', 'Ruins of Lordaeron']);
+  assert.equal(board.at(-1).name, 'Mystery Vault');
+  const dm = board.find((d) => d.name === 'Deadmines');
+  assert.deepEqual(dm.levels, [17, 26]);
   assert.deepEqual(dm.done.map((m) => m.name), ['Thrall']);
-  assert.deepEqual(dm.needs.map((m) => m.name), ['Mira']); // Bo is 15, below 17; Tiny has no data
-  assert.deepEqual(dm.partial.map((m) => m.name), []);
-  assert.deepEqual(dm.low.map((m) => m.name), ['Bo']);
-  const sfk = board.find((d) => d.name === 'Shadowfang Keep');
-  assert.deepEqual(sfk.partial.map((m) => m.name), ['Thrall']);
-  assert.deepEqual(sfk.needs.map((m) => m.name), []); // Mira is 20, below 22
-  assert.deepEqual(board.map((d) => d.name), ['The Deadmines', 'Shadowfang Keep']);
-  const forever = dungeonBoard(members, {
-    1: {}, 2: { r: { name: 'Ruins of Lordaeron', status: 'done', clears: 1 } }, 3: {}, 4: {},
-  })[0];
-  assert.deepEqual([forever.minLevel, forever.estimated], [20, true]);
-  assert.deepEqual(forever.needs.map((m) => m.name), ['Thrall']); // Bo and Tiny are below 20
-  assert.deepEqual(forever.low.map((m) => m.name), ['Bo', 'Tiny']);
+  assert.deepEqual(dm.partial.map((m) => m.name), ['Bo']);
+  assert.deepEqual(dm.needs.map((m) => m.name), ['Mira', 'Tiny']); // low levels and no-data characters still listed
+  const dal = board.find((d) => d.name === 'City of Dalaran');
+  assert.deepEqual([dal.levels, dal.forever, dal.done.map((m) => m.clears)], [[28, 33], true, [2]]);
+  assert.deepEqual(board.find((d) => d.name === 'Scholomance').needs.length, 4);
+
+  const kills = parseBossKills({ categories: [{ name: 'Dungeons & Raids', sub_categories: [{ name: 'Boss Kills', statistics: [
+    { name: 'Herod kills (Scarlet Monastery)', quantity: 2 },
+    { name: 'High Inquisitor Whitemane kills (Scarlet Monastery)', quantity: 1 },
+    { name: "Rath'mael Kills (Ruins of Lordaeron)", quantity: 1 },
+  ] }] }] });
+  assert.deepEqual(Object.keys(kills).sort(), ['ruins of lordaeron', 'scarlet monastery armory', 'scarlet monastery cathedral']);
 });
 
 test('dungeons are read about once an hour, only for level 10+', async () => {

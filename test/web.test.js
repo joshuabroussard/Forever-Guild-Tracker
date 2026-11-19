@@ -170,10 +170,11 @@ test('guild and character pages are public, ranked, and escaped', async () => {
   assert.match(html, /👑 <a href="\/g\/us\/ashen-oaths-watch\/thrall-stormborn"[^>]*>Thrall Stormborn<\/a> <span class="gain">\+5<\/span>/);
   assert.match(html, /<td class="n">2<\/td>.*Bo.*<td class="n">2<\/td>.*Mira/s); // tied levels share a place
   const dg = html.slice(html.indexOf('<h2>Dungeons</h2>'));
-  assert.match(dg, /<input type="radio" name="dg" id="dg-10" checked>/);
-  assert.match(dg, /<label for="dg-10" class="pill">The Deadmines<span class="pc">2<\/span><\/label>/);
-  assert.match(dg, /#dg-10:checked~\.panels #p-dg-10\{display:block\}/);
-  assert.match(dg, /<b>The Deadmines<\/b><span class="lv">17\+<\/span><span class="ct"><b>1<\/b>\/3<\/span>/);
+  assert.match(dg, /<input type="radio" name="dg" id="dg-deadmines" checked>/);
+  assert.match(dg, /<label for="dg-deadmines" class="pill">Deadmines<span class="pc">2<\/span><\/label>/);
+  assert.match(dg, /#dg-deadmines:checked~\.panels #p-dg-deadmines\{display:block\}/);
+  assert.match(dg, /<b>Deadmines<\/b><span class="lv">17–26<\/span><span class="ct"><b>1<\/b>\/3<\/span>/);
+  assert.match(dg, /<label for="dg-ragefire-chasm" class="pill">Ragefire Chasm<span class="pc">3<\/span>/); // every dungeon, even with no clears
   const notYet = dg.slice(dg.indexOf('Not yet'), dg.indexOf('>Done '));
   assert.match(notYet, /Bo<\/span>.*Mira<\/span><span class="pl">22<\/span><span class="px">partway<\/span>/s);
   assert.match(dg.slice(dg.indexOf('>Done ')), /Thrall Stormborn<\/span><span class="pl">60<\/span><span class="px">×3<\/span>/);
@@ -183,8 +184,8 @@ test('guild and character pages are public, ranked, and escaped', async () => {
   const ch = await char.text();
   assert.match(ch, /<b>#1<\/b> in guild/);
   assert.match(ch, /<b>\+5<\/b> today/);
-  assert.match(ch, /Cleared<\/h2><div class="chips"><span class="chip">The Deadmines <span class="muted">×3/);
-  assert.match(await (await get('/g/us/ashen-oaths-watch/bo')).text(), /Needs<\/h2><div class="chips"><span class="chip">The Deadmines/);
+  assert.match(ch, /Cleared<\/h2><div class="chips"><span class="chip">Deadmines <span class="muted">×3/);
+  assert.match(await (await get('/g/us/ashen-oaths-watch/bo')).text(), /Needs<\/h2><div class="chips"><span class="chip">Ragefire Chasm<\/span><span class="chip">Hall of Thanes<\/span><span class="chip">Ruins of Lordaeron<\/span><span class="chip">Wailing Caverns<\/span><span class="chip">Deadmines<\/span><span class="chip">Shadowfang Keep</);
 
   const font = await get('/fonts/inter.woff2');
   assert.equal(font.status, 200);

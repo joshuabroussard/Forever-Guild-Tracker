@@ -16,13 +16,13 @@ channel up to date with the guild's leveling progress.
   opens an armory-style character page: the character's render with gear
   down both sides like the official armory, item icons, quality colors, a
   full tooltip per item (hover or tap), and the character sheet stats. Turn it off per server on the settings page.
-- Dungeon first clears: the guild page lists, per dungeon, who still needs a
-  first clear, skipping characters below its entry level. Each character
-  page shows their cleared and still-to-do dungeons. Forever's
-  `/encounters/dungeons` is always empty, so clears come from
+- Dungeon first clears: the guild page has a picker with all 35 Forever
+  dungeons (the list and level ranges live in `src/dungeons.js`). Pick one to
+  see who has cleared it and everyone who hasn't, whatever their level. Each
+  character page shows their cleared dungeons and the ones in range for them.
+  Forever's `/encounters/dungeons` is always empty, so clears come from
   `/achievements/statistics`, under Dungeons & Raids > Boss Kills (an end-boss
-  kill is a clear), read about once an hour. Only dungeons someone in the
-  guild has cleared are listed, since Blizzard only reports kills.
+  kill is a clear), read about once an hour.
 - One Node process runs both, on `127.0.0.1:3000`, with nginx in front.
 
 ## Where the data comes from

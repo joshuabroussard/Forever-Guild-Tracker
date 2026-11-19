@@ -45,7 +45,7 @@ const GUILD_CSS = `
 .gt{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}.gt span{color:var(--text)}
 .pr{display:flex;align-items:center;gap:10px;padding:7px 0;border-top:1px solid var(--line);text-decoration:none}.grp .pr:first-of-type{border-top:0}
 .pn{font-weight:600;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.pl{color:var(--muted);font-size:13px}.px{color:var(--muted);font-size:12px;min-width:2em;text-align:right}
-.none,.low{color:var(--muted);font-size:13px}.low{margin-top:14px}
+.none{color:var(--muted);font-size:13px}
 table.rk{width:100%;border-collapse:collapse}table.rk td{padding:9px 4px;border-top:1px solid var(--line);vertical-align:middle}table.rk tr:first-child td{border-top:0}
 table.rk td.n{color:var(--muted);width:2em;font-size:13px}table.rk td.c{width:26px}table.rk a{text-decoration:none;font-weight:600}
 table.rk .bar{height:3px;border-radius:2px;background:var(--card2);margin-top:6px;overflow:hidden}table.rk .bar span{display:block;height:100%;border-radius:2px;opacity:.85}
@@ -70,7 +70,7 @@ function dungeonsCard(server, members, emojis) {
   if (!server.dungeons || !Object.keys(server.dungeons).length) return '';
   const board = dungeonBoard(members, server.dungeons);
   if (!board.length) return '';
-  const first = board.find((d) => d.needs.length) || board[0];
+  const first = board.find((d) => d.done.length && (d.needs.length || d.partial.length)) || board.find((d) => d.done.length) || board[0];
   const ids = board.map((d) => `dg-${slugId(d.id)}`);
   const radios = board.map((d, i) => `<input type="radio" name="dg" id="${ids[i]}"${d === first ? ' checked' : ''}>`).join('');
   const pills = board.map((d, i) => {
@@ -80,15 +80,14 @@ function dungeonsCard(server, members, emojis) {
   const panels = board.map((d, i) => {
     const total = d.done.length + d.partial.length + d.needs.length;
     const pct = total ? Math.round((d.done.length / total) * 100) : 0;
-    const level = d.minLevel ? `<span class="lv">${d.estimated ? '~' : ''}${d.minLevel}+</span>` : '';
+    const level = d.levels ? `<span class="lv">${d.levels[0]}–${d.levels[1]}</span>` : '';
     const notYet = [...d.needs, ...d.partial];
     const list = (title, people, fmt = (m) => personRow(server, m, emojis)) => people.length
       ? `<div class="grp"><div class="gt">${title} <span>${people.length}</span></div>${people.map(fmt).join('')}</div>` : '';
     return `<div class="panel" id="p-${ids[i]}"><div class="dh"><b>${esc(d.name)}</b>${level}<span class="ct"><b>${d.done.length}</b>/${total}</span></div>
 <div class="pb"><span style="width:${pct}%"></span></div>
 <div class="cols">${list('Not yet', notYet, (m) => personRow(server, m, emojis, d.partial.includes(m) ? '<span class="px">partway</span>' : '')) || '<div class="grp"><div class="gt">Not yet <span>0</span></div><div class="none">Everyone\'s done it</div></div>'}
-${list('Done', d.done, (m) => personRow(server, m, emojis, m.clears > 1 ? `<span class="px">×${m.clears}</span>` : ''))}</div>
-${d.low.length ? `<div class="low">Too low: ${d.low.map((m) => esc(m.name)).join(', ')}</div>` : ''}</div>`;
+${list('Done', d.done, (m) => personRow(server, m, emojis, m.clears > 1 ? `<span class="px">×${m.clears}</span>` : ''))}</div></div>`;
   }).join('');
   const show = ids.map((id) => `#${id}:checked~.pills label[for="${id}"]{background:var(--accent);color:#14110a}#${id}:checked~.panels #p-${id}{display:block}`).join('');
   return `<div class="card dgs" id="dungeons"><h2>Dungeons</h2><style>${show}</style>${radios}<div class="pills">${pills}</div><div class="panels">${panels}</div></div>`;
@@ -146,7 +145,8 @@ function characterDungeons(server, member) {
   const mine = server.dungeons?.[member.id];
   if (!mine) return '';
   const board = dungeonBoard([member], server.dungeons);
-  const todo = board.filter((d) => d.needs.length || d.partial.length);
+  // Only dungeons they're in range for, so a level 20 doesn't see Scholomance.
+  const todo = board.filter((d) => (d.needs.length || d.partial.length) && (d.minLevel == null ? d.partial.length : d.minLevel <= member.level));
   const done = board.filter((d) => d.done.length);
   const chips = (items, fmt) => `<div class="chips">${items.map(fmt).join('')}</div>`;
   const parts = [];

@@ -4,26 +4,72 @@
 // the achievement statistics instead: under "Dungeons & Raids" > "Boss
 // Kills" Blizzard counts kills of each dungeon's end boss, named like
 // "Edwin VanCleef Kills (Deadmines)". A kill there is a clear. Only bosses a
-// character has killed are listed, so the dungeon list is every dungeon
-// anyone in the guild has cleared. The older encounters shape is still read
+// character has killed are listed; the full dungeon list comes from
+// DUNGEONS below. The older encounters shape is still read
 // in case Blizzard starts filling it in.
 
-// Lowest level to enter, from Classic. Used to hide characters who are too
-// low to need a dungeon yet. Forever may have moved these; unknown names show
-// for everyone.
-const MIN_LEVELS = {
-  'ragefire chasm': 13, 'wailing caverns': 17, deadmines: 17, 'shadowfang keep': 22,
-  'blackfathom deeps': 24, stockade: 24, 'stormwind stockade': 24, gnomeregan: 29, 'razorfen kraul': 29,
-  'scarlet monastery': 26, 'scarlet monastery graveyard': 26, 'scarlet monastery library': 29,
-  'scarlet monastery armory': 32, 'scarlet monastery cathedral': 35, 'razorfen downs': 37, uldaman: 41,
-  "zul'farrak": 44, maraudon: 46, 'sunken temple': 50, 'temple of atal\'hakkar': 50, 'blackrock depths': 52,
-  'lower blackrock spire': 55, 'upper blackrock spire': 55, 'blackrock spire': 55, 'dire maul': 55,
-  scholomance: 58, stratholme: 58,
-};
+// Every dungeon in WoW Forever, in level order, with its suggested level
+// range. The nine Forever-only dungeons use Blizzard's own ranges (news post
+// "Explore the New Dungeons of World of Warcraft: Forever"); the Classic ones
+// use Warcraft Tavern's Forever dungeon guide. `aliases` are other names the
+// boss kill statistics might use for the same place.
+export const DUNGEONS = [
+  { name: 'Ragefire Chasm', levels: [13, 18] },
+  { name: 'Hall of Thanes', levels: [13, 18], forever: true },
+  { name: 'Ruins of Lordaeron', levels: [15, 20], forever: true },
+  { name: 'Wailing Caverns', levels: [15, 24] },
+  { name: 'Deadmines', levels: [17, 26], aliases: ['the deadmines'] },
+  { name: 'Shadowfang Keep', levels: [20, 30] },
+  { name: 'Blackfathom Deeps', levels: [24, 32] },
+  { name: 'The Stockade', levels: [24, 32], aliases: ['stockade', 'stormwind stockade', 'the stockades'] },
+  { name: 'Excavation Site', levels: [24, 29], forever: true, aliases: ['excavation site wetlands'] },
+  { name: 'City of Dalaran', levels: [28, 33], forever: true, aliases: ['dalaran'] },
+  { name: 'Razorfen Kraul', levels: [29, 38] },
+  { name: 'Gnomeregan', levels: [29, 38] },
+  { name: 'Scarlet Monastery Graveyard', levels: [30, 38], bosses: ['bloodmage thalnos'] },
+  { name: 'Scarlet Monastery Library', levels: [33, 41], bosses: ['arcanist doan'] },
+  { name: 'The Drowned City', levels: [35, 40], forever: true, aliases: ['drowned city'] },
+  { name: 'Scarlet Monastery Armory', levels: [36, 44], bosses: ['herod'] },
+  { name: 'Razorfen Downs', levels: [37, 46] },
+  { name: 'Scarlet Monastery Cathedral', levels: [38, 46], bosses: ['high inquisitor whitemane', 'scarlet commander mograine'] },
+  { name: "Krol'dok Stronghold", levels: [40, 45], forever: true },
+  { name: 'Uldaman', levels: [41, 51] },
+  { name: "Zul'Farrak", levels: [44, 54] },
+  { name: 'Maraudon', levels: [46, 55] },
+  { name: 'Alcaz Prison', levels: [48, 53], forever: true, aliases: ['alcaz island prison', 'alcaz island'] },
+  { name: 'Sunken Temple', levels: [50, 60], aliases: ["temple of atal'hakkar", 'the temple of atal hakkar'] },
+  { name: 'Blackrock Depths', levels: [52, 60] },
+  { name: 'Dire Maul East', levels: [54, 60], bosses: ['alzzin the wildshaper'] },
+  { name: 'Lower Blackrock Spire', levels: [55, 60], bosses: ['overlord wyrmthalak'] },
+  { name: 'Blackmaw Hold', levels: [55, 60], forever: true },
+  { name: 'Dire Maul West', levels: [56, 60], bosses: ['prince tortheldrin', "immol'thar"] },
+  { name: 'Dire Maul North', levels: [56, 60], bosses: ['king gordok'] },
+  { name: "Shaper's Terrace", levels: [58, 60], forever: true, aliases: ['shapers terrace'] },
+  { name: 'Stratholme Main Gate', levels: [58, 60], bosses: ['balnazzar'] },
+  { name: 'Stratholme Service Gate', levels: [58, 60], bosses: ['baron rivendare'] },
+  { name: 'Scholomance', levels: [58, 60] },
+  { name: 'Upper Blackrock Spire', levels: [59, 60], bosses: ['general drakkisath'] },
+];
+
+const norm = (s) => String(s || '').toLowerCase().replace(/[:\-–()]/g, ' ').replace(/['’]/g, "'").replace(/\s+/g, ' ').trim();
+const BY_NAME = new Map();
+const BY_BOSS = new Map();
+for (const d of DUNGEONS) {
+  d.id = norm(d.name);
+  for (const n of [d.name, ...(d.aliases || [])]) {
+    BY_NAME.set(norm(n), d);
+    BY_NAME.set(norm(n).replace(/^the /, ''), d);
+  }
+  for (const b of d.bosses || []) BY_BOSS.set(norm(b), d);
+}
+
+// The list entry for a dungeon (or boss) name from Blizzard, if known.
+export function findDungeon(name, boss) {
+  return BY_BOSS.get(norm(boss)) || BY_NAME.get(norm(name)) || BY_NAME.get(norm(name).replace(/^the /, '')) || null;
+}
 
 export function dungeonMinLevel(name) {
-  const key = String(name || '').toLowerCase().replace(/^the\s+/, '').replace(/[:\-–]/g, ' ').replace(/\s+/g, ' ').trim();
-  return MIN_LEVELS[key] ?? null;
+  return findDungeon(name)?.levels[0] ?? null;
 }
 
 // { [instanceId]: { name, status: 'done' | 'partial', clears } }
@@ -65,8 +111,9 @@ export function parseBossKills(body) {
           const m = BOSS_KILL.exec(st.name || '');
           const n = Number(st.quantity) || 0;
           if (!m || n <= 0) continue;
-          const name = m[2].trim();
-          const id = name.toLowerCase();
+          const known = findDungeon(m[2], m[1]);
+          const name = known?.name || m[2].trim();
+          const id = known?.id || norm(name);
           out[id] = { name, status: 'done', clears: Math.max(out[id]?.clears || 0, n) };
         }
       }
@@ -147,38 +194,38 @@ export async function fetchDungeons(client, members, previous = {}, { concurrenc
   return { dungeons, status };
 }
 
-// Per dungeon: who has cleared it, who got partway, and who still needs a
-// first clear (only characters we have data for and who are high enough).
-// Sorted by entry level, then name.
+// Per dungeon: who has cleared it, who got partway, and who hasn't yet.
+// Covers every dungeon in DUNGEONS plus any other the statistics name, in
+// level order. Everyone in `members` is listed, whatever their level;
+// characters Blizzard has no dungeon data for count as not done yet.
 export function dungeonBoard(members, byMember = {}) {
-  const dungeons = new Map();
-  for (const per of Object.values(byMember)) {
-    for (const [id, d] of Object.entries(per)) if (!dungeons.has(id)) dungeons.set(id, d.name);
+  // Line stored entries up with the list (older data may be keyed by an
+  // instance id or a slightly different name).
+  const extra = new Map();
+  const mine = {};
+  for (const [mid, per] of Object.entries(byMember)) {
+    mine[mid] = {};
+    for (const [id, d] of Object.entries(per || {})) {
+      const key = (DUNGEONS.find((x) => x.id === id) || findDungeon(d.name))?.id || id;
+      if (!DUNGEONS.some((x) => x.id === key) && !extra.has(key)) extra.set(key, d.name);
+      const prev = mine[mid][key];
+      mine[mid][key] = prev?.status === 'done' && d.status !== 'done' ? prev : d;
+    }
   }
-  const known = members.filter((m) => byMember[m.id]);
-  return [...dungeons.entries()]
-    .map(([id, name]) => {
-      // Forever's own dungeons (Ruins of Lordaeron, City of Dalaran) have no
-      // known entry level, so guess it as the lowest level of anyone who
-      // has cleared it.
-      let minLevel = dungeonMinLevel(name);
-      let estimated = false;
-      if (minLevel == null) {
-        const clearers = known.filter((m) => byMember[m.id][id]?.status === 'done').map((m) => m.level);
-        if (clearers.length) { minLevel = Math.min(...clearers); estimated = true; }
-      }
-      const done = [];
-      const partial = [];
-      const needs = [];
-      const low = [];
-      for (const m of known) {
-        const d = byMember[m.id][id];
-        if (d?.status === 'done') done.push({ ...m, clears: d.clears });
-        else if (minLevel == null || m.level >= minLevel) (d?.status === 'partial' ? partial : needs).push(m);
-        else low.push(m);
-      }
-      const byLevel = (a, b) => b.level - a.level || a.name.localeCompare(b.name);
-      return { id, name, minLevel, estimated, done: done.sort(byLevel), partial: partial.sort(byLevel), needs: needs.sort(byLevel), low: low.sort(byLevel) };
-    })
-    .sort((a, b) => (a.minLevel ?? 999) - (b.minLevel ?? 999) || a.name.localeCompare(b.name));
+  const list = [
+    ...DUNGEONS.map((d) => ({ id: d.id, name: d.name, levels: d.levels, forever: !!d.forever })),
+    ...[...extra.entries()].map(([id, name]) => ({ id, name, levels: null, forever: false })),
+  ];
+  const byLevel = (a, b) => b.level - a.level || a.name.localeCompare(b.name);
+  return list.map(({ id, name, levels, forever }) => {
+    const done = [];
+    const partial = [];
+    const needs = [];
+    for (const m of members) {
+      const d = mine[m.id]?.[id];
+      if (d?.status === 'done') done.push({ ...m, clears: d.clears });
+      else (d?.status === 'partial' ? partial : needs).push(m);
+    }
+    return { id, name, levels, minLevel: levels?.[0] ?? null, forever, done: done.sort(byLevel), partial: partial.sort(byLevel), needs: needs.sort(byLevel) };
+  });
 }
