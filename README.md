@@ -17,10 +17,12 @@ channel up to date with the guild's leveling progress.
   down both sides like the official armory, item icons, quality colors, a
   full tooltip per item (hover or tap), and the character sheet stats. Turn it off per server on the settings page.
 - Dungeon first clears: the guild page lists, per dungeon, who still needs a
-  first clear (and who got partway), skipping characters below its entry
-  level. Each character page shows their cleared and still-to-do dungeons.
-  Read from `/encounters/dungeons` about once an hour; only dungeons someone
-  in the guild has run are listed, since Blizzard only reports those.
+  first clear, skipping characters below its entry level. Each character
+  page shows their cleared and still-to-do dungeons. Forever's
+  `/encounters/dungeons` is always empty, so clears come from
+  `/achievements/statistics`, under Dungeons & Raids > Boss Kills (an end-boss
+  kill is a clear), read about once an hour. Only dungeons someone in the
+  guild has cleared are listed, since Blizzard only reports kills.
 - One Node process runs both, on `127.0.0.1:3000`, with nginx in front.
 
 ## Where the data comes from
@@ -43,9 +45,17 @@ pages also read `/equipment`, `/character-media` and `/statistics`, cached for
 `/data/wow/media/item/{id}` (Forever, then Classic Era, then retail) and are
 kept for a day.
 
-If dungeons come up empty, the log says why (`journalctl -u guild-tracker`),
-and `npm run probe -- --guild "Guild Name" --raw` prints Blizzard's full
-dungeon answer for the guild's top character.
+If dungeons come up empty, the log says why (`journalctl -u guild-tracker`).
+`/g/{region}/{guild}/{character}/raw` shows Blizzard's unparsed dungeon,
+raid, quest, achievement and statistics answers for one character, and
+`npm run probe -- --guild "Guild Name" --raw` does the same from the command
+line.
+
+## Trying other looks
+
+Add `?theme=ironforge`, `questlog`, `neon`, `discord` or `horde` to a guild or
+character page to try a different look (`?theme=default` for the current
+one). A cookie keeps the choice, and a bar at the top flips between them.
 
 ## Adding more to the embed later
 

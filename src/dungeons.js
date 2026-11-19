@@ -1,9 +1,12 @@
 // Dungeon first clears: who has finished each dungeon, and who still needs it.
 //
-// Blizzard's /encounters/dungeons only lists dungeons a character has been
-// in, so the dungeon list here is every dungeon anyone in the guild has
-// touched. Forever's endpoint isn't documented; this reads the same shape as
-// retail (expansions > instances > modes > progress) and is defensive about it.
+// Forever's /encounters/dungeons answers with nothing, so clears come from
+// the achievement statistics instead: under "Dungeons & Raids" > "Boss
+// Kills" Blizzard counts kills of each dungeon's end boss, named like
+// "Edwin VanCleef Kills (Deadmines)". A kill there is a clear. Only bosses a
+// character has killed are listed, so the dungeon list is every dungeon
+// anyone in the guild has cleared. The older encounters shape is still read
+// in case Blizzard starts filling it in.
 
 // Lowest level to enter, from Classic. Used to hide characters who are too
 // low to need a dungeon yet. Forever may have moved these; unknown names show
@@ -29,6 +32,7 @@ export function dungeonMinLevel(name) {
 // response and takes anything that looks like a dungeon entry: an object
 // naming an instance (or dungeon) with modes, progress or boss encounters.
 export function parseDungeons(body) {
+  if (Array.isArray(body?.categories)) return parseBossKills(body);
   const out = {};
   const seen = new Set();
   const walk = (node) => {
@@ -43,6 +47,33 @@ export function parseDungeons(body) {
     for (const [k, v] of Object.entries(node)) if (k !== '_links' && k !== 'character') walk(v);
   };
   walk(body);
+  return out;
+}
+
+const BOSS_KILL = /^(.+?)\s+kills\s*\((.+)\)\s*$/i;
+
+// From achievement statistics: { [dungeon name]: { name, status: 'done', clears } }
+// where clears is the end boss's kill count (the most-killed boss when a
+// dungeon lists more than one).
+export function parseBossKills(body) {
+  const out = {};
+  const walk = (cats, inDungeons) => {
+    for (const c of cats || []) {
+      const here = inDungeons || /dungeon/i.test(c.name || '');
+      if (here) {
+        for (const st of c.statistics || []) {
+          const m = BOSS_KILL.exec(st.name || '');
+          const n = Number(st.quantity) || 0;
+          if (!m || n <= 0) continue;
+          const name = m[2].trim();
+          const id = name.toLowerCase();
+          out[id] = { name, status: 'done', clears: Math.max(out[id]?.clears || 0, n) };
+        }
+      }
+      walk(c.sub_categories, here);
+    }
+  };
+  walk(body.categories, false);
   return out;
 }
 
@@ -94,7 +125,7 @@ export async function fetchDungeons(client, members, previous = {}, { concurrenc
       try {
         const body = await client.getDungeons(m.profilePath);
         dungeons[m.id] = parseDungeons(body);
-        status[m.id] = Object.keys(dungeons[m.id]).length ? 'ok' : 'empty';
+        status[m.id] = Object.keys(dungeons[m.id]).length || Array.isArray(body?.categories) ? 'ok' : 'empty';
         if (status[m.id] === 'empty' && !shapeLogged && body && Object.keys(body).some((k) => !['_links', 'character'].includes(k))) {
           shapeLogged = true;
           log(`Dungeons: couldn't read the answer for ${m.name}; it starts ${JSON.stringify(body).slice(0, 400)}`);

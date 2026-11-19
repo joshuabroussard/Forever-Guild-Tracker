@@ -123,7 +123,7 @@ function noDungeonsText(status, name) {
   if (status === 'notfound') return `Blizzard has no dungeon record for ${name} yet.`;
   if (status === 'empty') return `Blizzard's dungeon record for ${name} came back in a form this site can't read yet.`;
   if (status === 'error') return 'Couldn\'t reach Blizzard for dungeon data on the last check.';
-  return 'No dungeon runs yet.';
+  return `${name} hasn't killed a dungeon's end boss yet.`;
 }
 
 function characterDungeons(server, member) {

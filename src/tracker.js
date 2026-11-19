@@ -7,7 +7,7 @@ import { fetchDungeons } from './dungeons.js';
 
 const DUNGEON_EVERY_MS = 60 * 60_000;
 // Bump when the dungeon reader changes, so stored results are re-read at once.
-const DUNGEON_READER = 2;
+const DUNGEON_READER = 3;
 
 // One Blizzard client per region, shared by every server.
 export class BlizzardPool {

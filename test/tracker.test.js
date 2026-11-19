@@ -222,6 +222,31 @@ const dungeonBody = (list) => ({
   })) }],
 });
 
+// Forever's real answer: boss kills under Dungeons & Raids.
+const bossKills = (kills) => ({ categories: [
+  { name: 'Character', statistics: [{ name: 'Times camped', quantity: 18 }] },
+  { name: 'Dungeons & Raids', statistics: [{ name: 'Total 5-player dungeons entered', quantity: 20 }], sub_categories: [
+    { name: 'Boss Kills', statistics: kills.map(([name, quantity]) => ({ name, quantity })) },
+  ] },
+  { name: 'Deaths', sub_categories: [{ name: 'Dungeons and Raids', statistics: [{ name: 'Total deaths in 5-player dungeons', quantity: 7 }] }] },
+] });
+
+test('dungeon clears are read from boss kill statistics', async () => {
+  const { parseDungeons } = await import('../src/dungeons.js');
+  assert.deepEqual(parseDungeons(bossKills([
+    ['Edwin VanCleef Kills (Deadmines)', 1],
+    ['Shade of the Archmage Kills (City of Dalaran)', 2],
+    ['Lyn the Ignored Kills (City of Dalaran)', 1],
+    ['Bazzalan kills (Ragefire Chasm)', 3],
+    ['Mutanus the Devourer kills (Wailing Caverns)', 0],
+  ])), {
+    deadmines: { name: 'Deadmines', status: 'done', clears: 1 },
+    'city of dalaran': { name: 'City of Dalaran', status: 'done', clears: 2 },
+    'ragefire chasm': { name: 'Ragefire Chasm', status: 'done', clears: 3 },
+  });
+  assert.deepEqual(parseDungeons(bossKills([])), {});
+});
+
 test('dungeon progress is parsed into cleared and partway', async () => {
   const { parseDungeons } = await import('../src/dungeons.js');
   const d = parseDungeons(dungeonBody([[1, 'The Deadmines', 'COMPLETE', [3, 2, 2]], [2, 'Wailing Caverns', 'IN_PROGRESS', [1, 0, 0]]]));
@@ -257,7 +282,7 @@ test('dungeons are read about once an hour, only for level 10+', async () => {
   let dungeonCalls = 0;
   const body = roster({ Thrall: 30, Tiny: 4 });
   const fetch = blizzardFetch((url) => {
-    if (url.includes('/encounters/dungeons')) { dungeonCalls++; return dungeonBody([[1, 'The Deadmines', 'COMPLETE', [1]]]); }
+    if (url.includes('/achievements/statistics')) { dungeonCalls++; return bossKills([['Edwin VanCleef Kills (Deadmines)', 1]]); }
     if (url.includes('/profile/wow/character/thrall')) return { level: 30 };
     if (url.includes('/profile/wow/character/')) return {};
     return body;
@@ -268,7 +293,7 @@ test('dungeons are read about once an hour, only for level 10+', async () => {
   s = { ...s, ...(await refreshServer(pool, s, { refreshMinutes: 15, now: t0, dungeonLog: () => {} })).patch };
   assert.deepEqual(s.dungeonStatus, { 1: 'ok' });
   assert.equal(dungeonCalls, 1); // Tiny is under 10, so only Thrall
-  assert.equal(s.dungeons[1][1].status, 'done');
+  assert.equal(s.dungeons[1].deadmines.status, 'done');
   s = { ...s, ...(await refreshServer(pool, s, { refreshMinutes: 15, now: new Date(t0.getTime() + 15 * 60_000) })).patch };
   assert.equal(dungeonCalls, 1);
   s = { ...s, ...(await refreshServer(pool, s, { refreshMinutes: 15, now: new Date(t0.getTime() + 61 * 60_000) })).patch };

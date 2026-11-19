@@ -61,8 +61,10 @@ export class BlizzardClient {
     return this.get(profilePath, 'profile');
   }
 
+  // Forever's /encounters/dungeons comes back empty, but the achievement
+  // statistics list dungeon boss kills ("Edwin VanCleef Kills (Deadmines)").
   async getDungeons(profilePath) {
-    return this.get(`${profilePath}/encounters/dungeons`, 'profile');
+    return this.get(`${profilePath}/achievements/statistics`, 'profile');
   }
 
   // URL of a class's or item's icon. Forever's media routes aren't confirmed,
