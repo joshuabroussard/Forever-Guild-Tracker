@@ -9,7 +9,8 @@
   },
   "scripts": {
     "start": "node --env-file=.env src/index.js",
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "probe": "node --env-file=.env scripts/probe.js"
   },
   "dependencies": {
     "discord.js": "^14.28.1"
