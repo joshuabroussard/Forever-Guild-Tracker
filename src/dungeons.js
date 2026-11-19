@@ -170,13 +170,15 @@ export function dungeonBoard(members, byMember = {}) {
       const done = [];
       const partial = [];
       const needs = [];
+      const low = [];
       for (const m of known) {
         const d = byMember[m.id][id];
         if (d?.status === 'done') done.push({ ...m, clears: d.clears });
         else if (minLevel == null || m.level >= minLevel) (d?.status === 'partial' ? partial : needs).push(m);
+        else low.push(m);
       }
       const byLevel = (a, b) => b.level - a.level || a.name.localeCompare(b.name);
-      return { id, name, minLevel, estimated, done: done.sort(byLevel), partial: partial.sort(byLevel), needs: needs.sort(byLevel) };
+      return { id, name, minLevel, estimated, done: done.sort(byLevel), partial: partial.sort(byLevel), needs: needs.sort(byLevel), low: low.sort(byLevel) };
     })
     .sort((a, b) => (a.minLevel ?? 999) - (b.minLevel ?? 999) || a.name.localeCompare(b.name));
 }

@@ -169,9 +169,14 @@ test('guild and character pages are public, ranked, and escaped', async () => {
   assert.match(html, /3 members · avg 35/);
   assert.match(html, /👑 <a href="\/g\/us\/ashen-oaths-watch\/thrall-stormborn"[^>]*>Thrall Stormborn<\/a> <span class="gain">\+5<\/span>/);
   assert.match(html, /<td class="n">2<\/td>.*Bo.*<td class="n">2<\/td>.*Mira/s); // tied levels share a place
-  const needs = html.slice(html.indexOf('Needs a first clear'));
-  assert.match(needs, /<b>The Deadmines<\/b><span class="lv">17\+<\/span><span class="ct"><b>1<\/b>\/3<\/span>/);
-  assert.match(needs, />Bo<\/a><a class="part" title="Partway"[^>]*>Mira<\/a>/);
+  const dg = html.slice(html.indexOf('<h2>Dungeons</h2>'));
+  assert.match(dg, /<input type="radio" name="dg" id="dg-10" checked>/);
+  assert.match(dg, /<label for="dg-10" class="pill">The Deadmines<span class="pc">2<\/span><\/label>/);
+  assert.match(dg, /#dg-10:checked~\.panels #p-dg-10\{display:block\}/);
+  assert.match(dg, /<b>The Deadmines<\/b><span class="lv">17\+<\/span><span class="ct"><b>1<\/b>\/3<\/span>/);
+  const notYet = dg.slice(dg.indexOf('Not yet'), dg.indexOf('>Done '));
+  assert.match(notYet, /Bo<\/span>.*Mira<\/span><span class="pl">22<\/span><span class="px">partway<\/span>/s);
+  assert.match(dg.slice(dg.indexOf('>Done ')), /Thrall Stormborn<\/span><span class="pl">60<\/span><span class="px">×3<\/span>/);
 
   const char = await get('/g/us/ashen-oaths-watch/thrall-stormborn');
   assert.equal(char.status, 200);
